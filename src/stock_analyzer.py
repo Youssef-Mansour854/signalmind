@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
+import ta
 import numpy as np
 from typing import Dict, Optional
 import time
@@ -27,44 +27,48 @@ class StockAnalyzer:
             return None
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculates technical indicators using pandas-ta."""
-        # Ensure we have enough data
-        if len(df) < max(self.params.values()):
-            print("Not enough data to calculate all indicators")
-            return df
-
-        # RSI
-        df.ta.rsi(length=self.params['rsi_period'], append=True)
-        rsi_col = f"RSI_{self.params['rsi_period']}"
-
-        # MACD
-        df.ta.macd(fast=self.params['macd_fast'], slow=self.params['macd_slow'], signal=self.params['macd_signal'], append=True)
-        macd_col = f"MACD_{self.params['macd_fast']}_{self.params['macd_slow']}_{self.params['macd_signal']}"
-        macds_col = f"MACDs_{self.params['macd_fast']}_{self.params['macd_slow']}_{self.params['macd_signal']}"
-
-        # Moving Averages
-        df.ta.sma(length=self.params['sma_fast'], append=True)
-        sma_fast_col = f"SMA_{self.params['sma_fast']}"
-        
-        df.ta.sma(length=self.params['sma_slow'], append=True)
-        sma_slow_col = f"SMA_{self.params['sma_slow']}"
-        
-        df.ta.ema(length=self.params['ema_fast'], append=True)
-        ema_col = f"EMA_{self.params['ema_fast']}"
-
-        # Volume Analysis
-        df['Volume_Avg'] = df['Volume'].rolling(window=self.params['volume_avg_period']).mean()
-        
-        # Support and Resistance (Basic implementation based on local min/max over 30 days)
-        last_30_days = df.tail(self.params['sup_res_period'])
-        support = last_30_days['Low'].min()
-        resistance = last_30_days['High'].max()
-        
-        # Assign to the dataframe (broadcasting the single value to all rows)
-        df['Support'] = support
-        df['Resistance'] = resistance
-
+    """Calculates technical indicators using ta library."""
+    if len(df) < max(self.params.values()):
+        print("Not enough data to calculate all indicators")
         return df
+
+    # RSI
+    df['RSI_14'] = ta.momentum.RSIIndicator(
+        df['Close'], window=self.params['rsi_period']
+    ).rsi()
+
+    # MACD
+    macd = ta.trend.MACD(
+        df['Close'],
+        window_slow=self.params['macd_slow'],
+        window_fast=self.params['macd_fast'],
+        window_sign=self.params['macd_signal']
+    )
+    df[f"MACD_{self.params['macd_fast']}_{self.params['macd_slow']}_{self.params['macd_signal']}"] = macd.macd()
+    df[f"MACDs_{self.params['macd_fast']}_{self.params['macd_slow']}_{self.params['macd_signal']}"] = macd.macd_signal()
+
+    # Moving Averages
+    df[f"SMA_{self.params['sma_fast']}"] = ta.trend.SMAIndicator(
+        df['Close'], window=self.params['sma_fast']
+    ).sma_indicator()
+
+    df[f"SMA_{self.params['sma_slow']}"] = ta.trend.SMAIndicator(
+        df['Close'], window=self.params['sma_slow']
+    ).sma_indicator()
+
+    df[f"EMA_{self.params['ema_fast']}"] = ta.trend.EMAIndicator(
+        df['Close'], window=self.params['ema_fast']
+    ).ema_indicator()
+
+    # Volume Analysis
+    df['Volume_Avg'] = df['Volume'].rolling(window=self.params['volume_avg_period']).mean()
+
+    # Support and Resistance
+    last_30_days = df.tail(self.params['sup_res_period'])
+    df['Support'] = last_30_days['Low'].min()
+    df['Resistance'] = last_30_days['High'].max()
+
+    return df
 
     def get_latest_data(self, df: pd.DataFrame) -> Dict:
         """Extracts the most recent state of indicators for analysis."""
