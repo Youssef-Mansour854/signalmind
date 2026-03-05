@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import ta
 import numpy as np
+import requests
 from typing import Dict, Optional
 import time
 
@@ -13,7 +14,11 @@ class StockAnalyzer:
     def fetch_data(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
         """Fetches historical stock data using yfinance."""
         try:
-            ticker = yf.Ticker(symbol)
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36'
+            })
+            ticker = yf.Ticker(symbol, session=session)
             df = ticker.history(period=period)
             if df.empty:
                 print(f"No data found for {symbol}")
