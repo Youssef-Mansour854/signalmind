@@ -27,20 +27,27 @@ def main():
     for i, symbol in enumerate(all_stocks):
         print(f"[{i+1}/{total_stocks}] Analyzing {symbol}...")
         try:
+            # 1. Fetch & Analyze Data
             stock_data = analyzer.analyze_stock(symbol)
             if not stock_data:
                 print(f"Failed to fetch or analyze data for {symbol}.")
                 failed_stocks += 1
+                # Wait before next Alpha Vantage request (max 25 req/day, 1 req/sec)
+                time.sleep(15)
                 continue
 
-            time.sleep(config.API_DELAY_SECONDS)
+            # 2. Wait between Alpha Vantage requests
+            time.sleep(15)
 
+            # 3. Get AI Analysis
+            time.sleep(config.API_DELAY_SECONDS)
             analysis = gemini.analyze(stock_data)
             if not analysis:
                 print(f"Failed to get AI analysis for {symbol}.")
                 failed_stocks += 1
                 continue
 
+            # 4. Format & Send Message
             message = telegram.format_message(stock_data, analysis)
             success = telegram.send_message(message)
 
