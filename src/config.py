@@ -2,7 +2,7 @@ import os
 from typing import List, Dict
 
 # Environment variables
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -24,7 +24,7 @@ INDICATOR_PARAMS = {
 }
 
 # Anthropic API Settings
-CLAUDE_MODEL = "claude-3-5-haiku-20241022"
+GEMINI_MODEL = "gemini-2.0-flash"
 API_DELAY_SECONDS = 1  # Delay to avoid rate limits
 
 # Telegram Settings
@@ -33,8 +33,8 @@ DISCLAIMER_TEXT = "هذه التوصيات للأغراض التعليمية ف�
 def validate_config():
     """Validates that all required environment variables are set."""
     missing_vars = []
-    if not ANTHROPIC_API_KEY:
-        missing_vars.append("ANTHROPIC_API_KEY")
+    if not GEMINI_API_KEY:
+        missing_vars.append("GEMINI_API_KEY")
     if not TELEGRAM_BOT_TOKEN:
         missing_vars.append("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_CHAT_ID:
