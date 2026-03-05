@@ -1,14 +1,16 @@
-from google import genai
+import requests
 import json
 from typing import Dict, Any
+
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 class GeminiAnalyst:
     def __init__(self, config):
         self.config = config
-        self.client = genai.Client(api_key=config.GEMINI_API_KEY)
+        self.api_key = config.GEMINI_API_KEY
 
     def generate_prompt(self, stock_data: Dict[str, Any]) -> str:
-        """Constructs the prompt for Gemini based on technical indicators."""
+        """Constructs the prompt based on technical indicators."""
         symbol = stock_data['symbol']
         prompt = f"""
         Analyze the following technical indicators for the stock {symbol}:
@@ -41,14 +43,31 @@ class GeminiAnalyst:
         return prompt
 
     def analyze(self, stock_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calls Gemini API to analyze the data."""
+        """Calls Groq API to analyze the data."""
         prompt = self.generate_prompt(stock_data)
         try:
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash-lite",
-                contents=prompt
-            )
-            response_text = response.text
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert AI stock analyst. You provide strict purely technical analysis. You must always output ONLY valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1000
+            }
+
+            response = requests.post(GROQ_API_URL, headers=headers, json=payload)
+            response_text = response.json()["choices"][0]["message"]["content"]
             response_text = response_text.replace("```json", "").replace("```", "").strip()
 
             analysis = json.loads(response_text)
@@ -58,5 +77,5 @@ class GeminiAnalyst:
 
             return analysis
         except Exception as e:
-            print(f"Error calling Gemini API for {stock_data.get('symbol')}: {e}")
+            print(f"Error calling Groq API for {stock_data.get('symbol')}: {e}")
             return None
