@@ -1,23 +1,17 @@
-import google.generativeai as genai
+from google import genai
 import json
 from typing import Dict, Any
 
 class GeminiAnalyst:
     def __init__(self, config):
         self.config = config
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        self.client = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
-            generation_config={"temperature": 0.2}
-        )
+        self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
     def generate_prompt(self, stock_data: Dict[str, Any]) -> str:
         """Constructs the prompt for Gemini based on technical indicators."""
         symbol = stock_data['symbol']
-
         prompt = f"""
         Analyze the following technical indicators for the stock {symbol}:
-
         Current Price: {stock_data['close']}
         RSI (14): {stock_data['rsi']}
         MACD Line: {stock_data['macd_line']}
@@ -50,7 +44,10 @@ class GeminiAnalyst:
         """Calls Gemini API to analyze the data."""
         prompt = self.generate_prompt(stock_data)
         try:
-            response = self.client.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
             response_text = response.text
             response_text = response_text.replace("```json", "").replace("```", "").strip()
 
