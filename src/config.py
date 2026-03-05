@@ -40,6 +40,8 @@ def validate_config():
         missing_vars.append("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_CHAT_ID:
         missing_vars.append("TELEGRAM_CHAT_ID")
+    if not ALPHA_VANTAGE_KEY:
+        missing_vars.append("ALPHA_VANTAGE_KEY")
         
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
