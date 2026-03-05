@@ -1,29 +1,46 @@
-import yfinance as yf
+import requests
 import pandas as pd
 import ta
 import numpy as np
-import requests
 from typing import Dict, Optional
 import time
+
+ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
 
 class StockAnalyzer:
     def __init__(self, config):
         self.config = config
         self.params = config.INDICATOR_PARAMS
+        self.api_key = config.ALPHA_VANTAGE_KEY
 
-    def fetch_data(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
-        """Fetches historical stock data using yfinance."""
+    def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
+        """Fetches historical stock data using Alpha Vantage."""
         try:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0.4472.124 Safari/537.36'
-            })
-            ticker = yf.Ticker(symbol, session=session)
-            df = ticker.history(period=period)
-            if df.empty:
-                print(f"No data found for {symbol}")
+            clean_symbol = symbol.replace(".CA", "")
+
+            params = {
+                "function": "TIME_SERIES_DAILY",
+                "symbol": clean_symbol,
+                "outputsize": "compact",
+                "apikey": self.api_key
+            }
+
+            response = requests.get(ALPHA_VANTAGE_BASE, params=params)
+            data = response.json()
+
+            if "Time Series (Daily)" not in data:
+                print(f"No data found for {symbol}: {data.get('Note') or data.get('Information') or 'Unknown error'}")
                 return None
+
+            ts = data["Time Series (Daily)"]
+            df = pd.DataFrame.from_dict(ts, orient="index")
+            df.index = pd.to_datetime(df.index)
+            df = df.sort_index()
+            df.columns = ["Open", "High", "Low", "Close", "Volume"]
+            df = df.astype(float)
+
             return df
+
         except Exception as e:
             print(f"Error fetching data for {symbol}: {e}")
             return None
@@ -115,11 +132,3 @@ class StockAnalyzer:
         latest_data = self.get_latest_data(df)
         latest_data['symbol'] = symbol
         return latest_data
-
-if __name__ == "__main__":
-    import config
-    analyzer = StockAnalyzer(config)
-    print("Testing US Stock (AAPL):")
-    print(analyzer.analyze_stock("AAPL"))
-    print("\nTesting EGX Stock (COMI.CA):")
-    print(analyzer.analyze_stock("COMI.CA"))
