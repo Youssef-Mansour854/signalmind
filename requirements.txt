@@ -1,6 +1,6 @@
 yfinance==0.2.37
 pandas==2.2.1
-pandas-ta
+ta
 google-generativeai
 python-telegram-bot==21.0.1
 requests==2.31.0
