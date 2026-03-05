@@ -45,7 +45,7 @@ class GeminiAnalyst:
         prompt = self.generate_prompt(stock_data)
         try:
             response = self.client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash-lite"
                 contents=prompt
             )
             response_text = response.text
