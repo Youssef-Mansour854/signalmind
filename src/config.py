@@ -9,7 +9,7 @@ ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 
 # Stock Lists
 US_STOCKS: List[str] = ["AAPL", "TSLA", "NVDA", "AMZN", "MSFT"]
-EGX_STOCKS: List[str] = ["COMI.CA", "EKHO.CA", "HRHO.CA"]
+EGX_STOCKS: List[str] = []
 
 # Analysis Parameters
 INDICATOR_PARAMS = {
