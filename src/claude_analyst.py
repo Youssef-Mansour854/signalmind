@@ -1,11 +1,11 @@
-import anthropic
+import gemini
 import json
 from typing import Dict, Any
 
-class ClaudeAnalyst:
+class GeminiAnalyst:
     def __init__(self, config):
         self.config = config
-        self.client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        self.client = anthropic.Anthropic(api_key=config.GEMINI_API_KEY)
 
     def generate_prompt(self, stock_data: Dict[str, Any]) -> str:
         """Constructs the prompt for Claude based on technical indicators."""
@@ -43,7 +43,7 @@ class ClaudeAnalyst:
         return prompt
 
     def analyze(self, stock_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calls Claude API to analyze the data."""
+        """Calls Gemini API to analyze the data."""
         prompt = self.generate_prompt(stock_data)
 
         try:
