@@ -7,7 +7,7 @@ class GeminiAnalyst:
         self.config = config
         genai.configure(api_key=config.GEMINI_API_KEY)
         self.client = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             generation_config={"temperature": 0.2}
         )
 
