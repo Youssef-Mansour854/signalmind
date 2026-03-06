@@ -162,7 +162,7 @@ class StockAnalyzer:
         if not all([close, ema_50, ema_200]):
             return False  # If data missing, don't skip
 
-        return close < ema_50 and ema_50 < ema_200
+        return False
 
     def analyze_stock(self, symbol: str) -> Optional[Dict]:
         """Full pipeline for a single stock."""
