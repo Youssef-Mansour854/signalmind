@@ -2,7 +2,7 @@ import os
 from typing import List, Dict
 
 # Environment variables
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
@@ -34,8 +34,8 @@ DISCLAIMER_TEXT = "هذه التوصيات للأغراض التعليمية ف�
 def validate_config():
     """Validates that all required environment variables are set."""
     missing_vars = []
-    if not GEMINI_API_KEY:
-        missing_vars.append("GEMINI_API_KEY")
+    if not GROQ_API_KEY:
+        missing_vars.append("GROQ_API_KEY")
     if not TELEGRAM_BOT_TOKEN:
         missing_vars.append("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_CHAT_ID:
