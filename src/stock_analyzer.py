@@ -86,7 +86,6 @@ class StockAnalyzer:
         last_30_days = df.tail(self.params['sup_res_period'])
         df['Support'] = last_30_days['Low'].min()
         df['Resistance'] = last_30_days['High'].max()
-
         # Bollinger Bands
         bb = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
         df['BB_High'] = bb.bollinger_hband()

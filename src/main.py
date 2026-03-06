@@ -73,7 +73,6 @@ def main():
 
     if total_stocks > 0:
         telegram.send_summary(total_stocks, buy_signals, buy_symbols)
-
     if total_stocks > 0 and (failed_stocks / total_stocks) > 0.5:
         print("More than 50% of stocks failed. Sending error alert.")
         telegram.send_error_alert(total_stocks, failed_stocks)
