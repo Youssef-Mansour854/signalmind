@@ -41,6 +41,16 @@ def main():
                 time.sleep(15)
                 continue
 
+            # Macro Trend Filter
+            close_price = stock_data.get('close')
+            ema_50 = stock_data.get('ema_50')
+            ema_200 = stock_data.get('ema_200')
+
+            if ema_50 is None or ema_200 is None or close_price is None or not (close_price > ema_200 and ema_50 > ema_200):
+                print(f"Skipped {symbol}: In a macro downtrend.")
+                time.sleep(15)
+                continue
+
             # 2. Wait between Alpha Vantage requests
             time.sleep(15)
 

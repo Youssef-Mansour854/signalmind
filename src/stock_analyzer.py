@@ -21,7 +21,7 @@ class StockAnalyzer:
             params = {
                 "function": "TIME_SERIES_DAILY",
                 "symbol": clean_symbol,
-                "outputsize": "compact",
+                "outputsize": "full",
                 "apikey": self.api_key
             }
 
@@ -79,6 +79,14 @@ class StockAnalyzer:
             df['Close'], window=self.params['ema_fast']
         ).ema_indicator()
 
+        df['EMA_50'] = ta.trend.EMAIndicator(
+            df['Close'], window=50
+        ).ema_indicator()
+
+        df['EMA_200'] = ta.trend.EMAIndicator(
+            df['Close'], window=200
+        ).ema_indicator()
+
         # Volume Analysis
         df['Volume_Avg'] = df['Volume'].rolling(window=self.params['volume_avg_period']).mean()
 
@@ -120,6 +128,8 @@ class StockAnalyzer:
             'sma_20': latest[sma_fast_col],
             'sma_50': latest[sma_slow_col],
             'ema_20': latest[ema_col],
+            'ema_50': latest['EMA_50'],
+            'ema_200': latest['EMA_200'],
             'support': latest['Support'],
             'resistance': latest['Resistance'],
             'bb_high': latest['BB_High'],
