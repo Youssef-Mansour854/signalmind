@@ -25,17 +25,21 @@ class GeminiAnalyst:
         Average Volume (20d): {stock_data['volume_avg']}
         Recent Support (30d): {stock_data['support']}
         Recent Resistance (30d): {stock_data['resistance']}
-        Bollinger Bands (20) High: {stock_data['bb_high']}
-        Bollinger Bands (20) Low: {stock_data['bb_low']}
-        Bollinger Bands (20) Mid: {stock_data['bb_mid']}
-        Stochastic RSI K (14): {stock_data['stoch_rsi_k']}
-        Stochastic RSI D (14): {stock_data['stoch_rsi_d']}
+        Bollinger Bands High: {stock_data.get('bb_high')}
+        Bollinger Bands Low: {stock_data.get('bb_low')}
+        Bollinger Bands Mid: {stock_data.get('bb_mid')}
+        Stochastic RSI K: {stock_data.get('stoch_rsi_k')}
+        Stochastic RSI D: {stock_data.get('stoch_rsi_d')}
 
-        You are an expert technical analyst. Be extremely selective. ONLY signal a "BUY" if there is strong confluence of at least 3 indicators agreeing.
-        Based on this data, provide an analysis in the exact JSON format specified below.
-        DO NOT output any markdown, only valid JSON.
+        You are an expert technical analyst. Analyze the data objectively:
+        - Signal BUY when: RSI < 60, price near support, MACD showing positive momentum, or price above SMA20
+        - Signal SELL when: RSI > 70, price near resistance, MACD showing negative momentum
+        - Signal HOLD when: mixed signals or unclear trend
+        
+        Be balanced and realistic — expect roughly 20-40% of stocks to be BUY on any given day.
 
-        Required JSON structure:
+        Provide your analysis in the exact JSON format below. DO NOT output any markdown, only valid JSON.
+
         {{
             "signal": "BUY" | "SELL" | "HOLD",
             "confidence": "High" | "Medium" | "Low",
@@ -43,7 +47,7 @@ class GeminiAnalyst:
             "entry_price": number,
             "stop_loss": number,
             "take_profit": number,
-            "explanation_arabic": "Short 3-4 line explanation in Arabic summarizing the technical picture and the reason for the signal."
+            "explanation_arabic": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة"
         }}
         """
         return prompt
@@ -61,14 +65,14 @@ class GeminiAnalyst:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are an expert AI stock analyst. You provide strict purely technical analysis. You must always output ONLY valid JSON."
+                        "content": "You are an expert AI stock analyst. You provide objective technical analysis. You must always output ONLY valid JSON with no markdown."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "temperature": 0.2,
+                "temperature": 0.3,
                 "max_tokens": 1000
             }
 
