@@ -55,6 +55,21 @@ class TelegramSender:
             print(f"Error sending Telegram message: {e}")
             return False
 
+    def send_summary(self, total: int, buy_count: int, buy_symbols: list) -> bool:
+        """Sends a final summary report to Telegram."""
+        cairo_time = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        date_str = cairo_time.strftime("%Y-%m-%d")
+        symbols_str = ", ".join(buy_symbols) if buy_symbols else "None"
+        
+        text = f"""---
+📊 SignalMind Daily Summary
+🗓 {date_str}
+✅ Analyzed: {total} stocks
+🟢 BUY Signals: {buy_count}
+📋 Opportunities: {symbols_str}
+---"""
+        return self.send_message(text)
+
     def send_error_alert(self, total: int, failed: int) -> bool:
         """Sends an alert if failure threshold is reached."""
         text = f"🚨 <b>SignalMind Alert</b> 🚨\nMore than 50% of stocks failed processing today.\nTotal: {total}, Failed: {failed}"

@@ -7,7 +7,7 @@ An automated system that analyzes stocks (EGX and US markets) and sends AI-gener
 - **GitHub Actions**: Daily scheduling
 - **Python**: Data fetching and analysis
 - **yfinance** & **pandas-ta**: Financial data and technical indicators
-- **Anthropic Claude (claude-3-5-haiku)**: AI analysis and signal generation
+- **Google Gemini API (gemini-1.5-flash)**: AI analysis and signal generation
 - **Telegram Bot API**: Alert delivery
 
 ## Daily Schedule
@@ -26,17 +26,16 @@ Runs automatically every weekday (Monday-Friday) at **8:00 AM Cairo Time (UTC+2)
 4. Send a message to your new bot.
 5. Go to `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` to find your `chat_id` (look inside the JSON response for `"chat":{"id":...}`).
 
-### 2. Anthropic API Key
+### 2. Google Gemini API Key
 
-1. Go to the [Anthropic Console](https://console.anthropic.com/).
-2. Create an account, add billing, and generate an API key.
+1. Go to Google AI Studio to get your Gemini API key.
 
 ### 3. GitHub Repository Configuration
 
 1. Fork or push this repository to your GitHub account.
 2. Go to **Settings > Secrets and variables > Actions**.
 3. Create the following **New repository secrets**:
-   - `ANTHROPIC_API_KEY`: Your Anthropic API Key.
+   - `GEMINI_API_KEY`: Your Google Gemini API Key.
    - `TELEGRAM_BOT_TOKEN`: Your Telegram Bot Token.
    - `TELEGRAM_CHAT_ID`: Your Telegram Chat ID.
 
@@ -73,7 +72,7 @@ GitHub Actions will now automatically run the script every weekday at 8:00 AM Ca
    Create a `.env` file in the root directory (or simply copy/rename `.env.example` if available) and add:
 
    ```env
-   ANTHROPIC_API_KEY=your_key_here
+   GEMINI_API_KEY=your_key_here
    TELEGRAM_BOT_TOKEN=your_bot_token_here
    TELEGRAM_CHAT_ID=your_chat_id_here
    ```

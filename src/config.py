@@ -2,13 +2,25 @@ import os
 from typing import List, Dict
 
 # Environment variables
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 
 # Stock Lists
-US_STOCKS: List[str] = ["AAPL", "TSLA", "NVDA", "AMZN", "MSFT"]
-EGX_STOCKS: List[str] = ["COMI.CA", "EKHO.CA", "HRHO.CA"]
+US_STOCKS: List[str] = [
+    # Technology
+    "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMD", "INTC", "CRM", "ADBE", "ORCL",
+    # Healthcare
+    "JNJ", "PFE", "ABBV", "MRK", "UNH", "TMO", "ABT",
+    # Consumer
+    "PG", "KO", "PEP", "WMT", "COST", "NKE", "MCD",
+    # Industrial & Energy (Halal)
+    "HON", "GE", "CAT", "BA", "XOM", "CVX",
+    # Finance (low interest exposure)
+    "V", "MA", "PYPL",
+]
+EGX_STOCKS: List[str] = []
 
 # Analysis Parameters
 INDICATOR_PARAMS = {
@@ -24,7 +36,7 @@ INDICATOR_PARAMS = {
 }
 
 # Anthropic API Settings
-CLAUDE_MODEL = "claude-3-5-haiku-20241022"
+GEMINI_MODEL = "gemini-2.0-flash"
 API_DELAY_SECONDS = 1  # Delay to avoid rate limits
 
 # Telegram Settings
@@ -33,12 +45,14 @@ DISCLAIMER_TEXT = "هذه التوصيات للأغراض التعليمية ف�
 def validate_config():
     """Validates that all required environment variables are set."""
     missing_vars = []
-    if not ANTHROPIC_API_KEY:
-        missing_vars.append("ANTHROPIC_API_KEY")
+    if not GROQ_API_KEY:
+        missing_vars.append("GROQ_API_KEY")
     if not TELEGRAM_BOT_TOKEN:
         missing_vars.append("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_CHAT_ID:
         missing_vars.append("TELEGRAM_CHAT_ID")
+    if not ALPHA_VANTAGE_KEY:
+        missing_vars.append("ALPHA_VANTAGE_KEY")
         
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
