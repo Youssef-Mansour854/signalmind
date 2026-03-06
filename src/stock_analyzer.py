@@ -94,6 +94,7 @@ class StockAnalyzer:
         last_30_days = df.tail(self.params['sup_res_period'])
         df['Support'] = last_30_days['Low'].min()
         df['Resistance'] = last_30_days['High'].max()
+
         # Bollinger Bands
         bb = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
         df['BB_High'] = bb.bollinger_hband()
@@ -147,6 +148,22 @@ class StockAnalyzer:
 
         return data
 
+    def is_in_macro_downtrend(self, data: Dict) -> bool:
+        """
+        Relaxed macro filter:
+        Skip stock only if BOTH conditions are true:
+        - Price is below EMA 50
+        - EMA 50 is below EMA 200
+        """
+        close = data.get('close')
+        ema_50 = data.get('ema_50')
+        ema_200 = data.get('ema_200')
+
+        if not all([close, ema_50, ema_200]):
+            return False  # If data missing, don't skip
+
+        return close < ema_50 and ema_50 < ema_200
+
     def analyze_stock(self, symbol: str) -> Optional[Dict]:
         """Full pipeline for a single stock."""
         df = self.fetch_data(symbol)
@@ -156,4 +173,10 @@ class StockAnalyzer:
         df = self.calculate_indicators(df)
         latest_data = self.get_latest_data(df)
         latest_data['symbol'] = symbol
+
+        # Macro trend filter
+        if self.is_in_macro_downtrend(latest_data):
+            print(f"Skipped {symbol}: In a macro downtrend (price < EMA50 < EMA200)")
+            return None
+
         return latest_data
