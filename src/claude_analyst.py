@@ -7,7 +7,7 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 class GeminiAnalyst:
     def __init__(self, config):
         self.config = config
-        self.api_key = config.GEMINI_API_KEY
+        self.api_key = config.GROQ_API_KEY
 
     def generate_prompt(self, stock_data: Dict[str, Any]) -> str:
         """Constructs the prompt based on technical indicators."""
