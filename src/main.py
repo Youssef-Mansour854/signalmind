@@ -1,10 +1,9 @@
 import config
 from stock_analyzer import StockAnalyzer
-from claude_analyst import GeminiAnalyst
+from claude_analyst import GroqAnalyst
 from telegram_sender import TelegramSender
 import sys
 import time
-import random
 
 def main():
     try:
@@ -16,13 +15,10 @@ def main():
     print("Starting SignalMind stock analysis process...")
 
     analyzer = StockAnalyzer(config)
-    gemini = GeminiAnalyst(config)
+    groq = GroqAnalyst(config)
     telegram = TelegramSender(config)
 
-    all_stocks = config.US_STOCKS
-    if len(all_stocks) > 25:
-        all_stocks = random.sample(all_stocks, 25)
-
+    all_stocks = config.US_STOCKS + config.EGX_STOCKS
     total_stocks = len(all_stocks)
     failed_stocks = 0
     buy_signals = 0
@@ -38,31 +34,17 @@ def main():
             if not stock_data:
                 print(f"Failed to fetch or analyze data for {symbol}.")
                 failed_stocks += 1
-                time.sleep(15)
                 continue
 
-            # Macro Trend Filter
-            close_price = stock_data.get('close')
-            ema_50 = stock_data.get('ema_50')
-            ema_200 = stock_data.get('ema_200')
-
-            if ema_50 is None or ema_200 is None or close_price is None or not (close_price > ema_200 and ema_50 > ema_200):
-                print(f"Skipped {symbol}: In a macro downtrend.")
-                time.sleep(15)
-                continue
-
-            # 2. Wait between Alpha Vantage requests
-            time.sleep(15)
-
-            # 3. Get AI Analysis
+            # 2. Get AI Analysis
             time.sleep(config.API_DELAY_SECONDS)
-            analysis = gemini.analyze(stock_data)
+            analysis = groq.analyze(stock_data)
             if not analysis:
                 print(f"Failed to get AI analysis for {symbol}.")
                 failed_stocks += 1
                 continue
 
-            # 4. Send ONLY BUY signals
+            # 3. Send ONLY BUY signals
             if analysis.get('signal') == 'BUY':
                 buy_signals += 1
                 buy_symbols.append(symbol)

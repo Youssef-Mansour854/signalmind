@@ -4,39 +4,32 @@ import ta
 import numpy as np
 from typing import Dict, Optional
 import time
+import yfinance as yf
 
-ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
+# Configure request session to bypass blocks
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+})
 
 class StockAnalyzer:
     def __init__(self, config):
         self.config = config
         self.params = config.INDICATOR_PARAMS
-        self.api_key = config.ALPHA_VANTAGE_KEY
 
     def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetches historical stock data using Alpha Vantage."""
+        """Fetches historical stock data using yfinance."""
         try:
-            clean_symbol = symbol.replace(".CA", "")
+            ticker = yf.Ticker(symbol, session=session)
+            df = ticker.history(period="1y")
 
-            params = {
-                "function": "TIME_SERIES_DAILY",
-                "symbol": clean_symbol,
-                "outputsize": "full",
-                "apikey": self.api_key
-            }
-
-            response = requests.get(ALPHA_VANTAGE_BASE, params=params)
-            data = response.json()
-
-            if "Time Series (Daily)" not in data:
-                print(f"No data found for {symbol}: {data.get('Note') or data.get('Information') or 'Unknown error'}")
+            if df.empty:
+                print(f"No data found for {symbol}")
                 return None
 
-            ts = data["Time Series (Daily)"]
-            df = pd.DataFrame.from_dict(ts, orient="index")
-            df.index = pd.to_datetime(df.index)
-            df = df.sort_index()
-            df.columns = ["Open", "High", "Low", "Close", "Volume"]
+            # Select only the columns needed for technical indicators
+            df = df[["Open", "High", "Low", "Close", "Volume"]]
             df = df.astype(float)
 
             return df
@@ -162,7 +155,7 @@ class StockAnalyzer:
         if not all([close, ema_50, ema_200]):
             return False  # If data missing, don't skip
 
-        return False
+        return close < ema_50 and ema_50 < ema_200
 
     def analyze_stock(self, symbol: str) -> Optional[Dict]:
         """Full pipeline for a single stock."""

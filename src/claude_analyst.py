@@ -4,7 +4,7 @@ from typing import Dict, Any
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-class GeminiAnalyst:
+class GroqAnalyst:
     def __init__(self, config):
         self.config = config
         self.api_key = config.GROQ_API_KEY

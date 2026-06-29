@@ -5,7 +5,6 @@ from typing import List, Dict
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY")
 
 # Stock Lists
 US_STOCKS: List[str] = [
@@ -20,7 +19,7 @@ US_STOCKS: List[str] = [
     # Finance (low interest exposure)
     "V", "MA", "PYPL",
 ]
-EGX_STOCKS: List[str] = []
+EGX_STOCKS: List[str] = ["COMI.CA", "EKHO.CA", "HRHO.CA", "TMGH.CA", "EFID.CA"]
 
 # Analysis Parameters
 INDICATOR_PARAMS = {
@@ -51,8 +50,6 @@ def validate_config():
         missing_vars.append("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_CHAT_ID:
         missing_vars.append("TELEGRAM_CHAT_ID")
-    if not ALPHA_VANTAGE_KEY:
-        missing_vars.append("ALPHA_VANTAGE_KEY")
         
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
