@@ -6,20 +6,30 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# Stock Lists
+# Stock Lists (Sharia-Compliant Only)
 US_STOCKS: List[str] = [
     # Technology
-    "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMD", "INTC", "CRM", "ADBE", "ORCL",
+    "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMD", "INTC", "CRM", "ADBE", "ORCL", "QCOM", "AVGO", "ASML",
+    # Automotive / EV
+    "TSLA",
     # Healthcare
-    "JNJ", "PFE", "ABBV", "MRK", "UNH", "TMO", "ABT",
-    # Consumer
-    "PG", "KO", "PEP", "WMT", "COST", "NKE", "MCD",
-    # Industrial & Energy (Halal)
+    "LLY", "JNJ", "PFE", "ABBV", "MRK", "TMO", "ABT",
+    # Consumer & Retail
+    "AMZN", "PG", "KO", "PEP", "WMT", "COST", "NKE",
+    # Industrial & Energy
     "HON", "GE", "CAT", "BA", "XOM", "CVX",
-    # Finance (low interest exposure)
-    "V", "MA", "PYPL",
 ]
-EGX_STOCKS: List[str] = ["COMI.CA", "EKHO.CA", "HRHO.CA", "TMGH.CA", "EFID.CA"]
+EGX_STOCKS: List[str] = [
+    "TMGH.CA",  # طلعت مصطفى
+    "EFID.CA",  # إيديتا
+    "EFIH.CA",  # إي فاينانس
+    "ADIB.CA",  # مصرف أبوظبي الإسلامي
+    "JUFO.CA",  # جهينة
+    "ETEL.CA",  # المصرية للاتصالات
+    "ISPH.CA",  # ابن سينا فارما
+    "AMOC.CA",  # أموك
+    "PHDC.CA"   # بالم هيلز
+]
 
 # Analysis Parameters
 INDICATOR_PARAMS = {
