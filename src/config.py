@@ -21,14 +21,27 @@ US_STOCKS: List[str] = [
 ]
 EGX_STOCKS: List[str] = [
     "TMGH.CA",  # طلعت مصطفى
-    "EFID.CA",  # إيديتا
-    "EFIH.CA",  # إي فاينانس
+    "PHDC.CA",  # بالم هيلز
+    "OCDI.CA",  # سوديك
+    "MASR.CA",  # مدينة مصر للإسكان
+    "ORHD.CA",  # أوراسكوم للتنمية
     "ADIB.CA",  # مصرف أبوظبي الإسلامي
-    "JUFO.CA",  # جهينة
+    "FAIT.CA",  # بنك فيصل الإسلامي
+    "SAUD.CA",  # بنك البركة مصر
+    "EFIH.CA",  # إي فاينانس
     "ETEL.CA",  # المصرية للاتصالات
+    "JUFO.CA",  # جهينة
+    "EFID.CA",  # إيديتا
+    "OLFI.CA",  # عبور لاند
     "ISPH.CA",  # ابن سينا فارما
+    "RMDA.CA",  # راميدا للأدوية
     "AMOC.CA",  # أموك
-    "PHDC.CA"   # بالم هيلز
+    "SKPC.CA",  # سيدي كرير للبتروكيماويات
+    "EGAL.CA",  # مصر للألومنيوم
+    "ORAS.CA",  # أوراسكوم كونستراكشون
+    "ORWE.CA",  # النساجون الشرقيون
+    "EGAS.CA",  # غاز مصر
+    "MTIE.CA"   # إم إم جروب
 ]
 
 # Analysis Parameters
