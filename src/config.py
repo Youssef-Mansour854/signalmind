@@ -10,14 +10,15 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 US_STOCKS: List[str] = [
     # Technology
     "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMD", "INTC", "CRM", "ADBE", "ORCL", "QCOM", "AVGO", "ASML",
+    "CSCO", "INTU", "AMAT", "LRCX", "PANW", "NOW", "KLAC",
     # Automotive / EV
     "TSLA",
-    # Healthcare
-    "LLY", "JNJ", "PFE", "ABBV", "MRK", "TMO", "ABT",
+    # Healthcare & Biotech
+    "LLY", "JNJ", "PFE", "ABBV", "MRK", "TMO", "ABT", "AMGN", "GILD", "ISRG", "REGN", "VRTX",
     # Consumer & Retail
-    "AMZN", "PG", "KO", "PEP", "WMT", "COST", "NKE",
-    # Industrial & Energy
-    "HON", "GE", "CAT", "BA", "XOM", "CVX",
+    "AMZN", "PG", "KO", "PEP", "WMT", "COST", "NKE", "HD", "LOW", "TJX", "TGT",
+    # Industrial, Materials & Energy
+    "HON", "GE", "CAT", "BA", "XOM", "CVX", "COP", "SLB", "DE"
 ]
 EGX_STOCKS: List[str] = [
     "TMGH.CA",  # طلعت مصطفى
