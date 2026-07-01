@@ -30,8 +30,17 @@ interface PortfolioItem {
   market: 'US' | 'EGX';
   actualEntryPrice: number;
   positionSize: number;
-  status: 'ACTIVE' | 'CLOSED_WIN' | 'CLOSED_LOSS';
+  quantity?: number;
+  status: 'ACTIVE' | 'CLOSED_WIN' | 'CLOSED_LOSS' | 'Hit TP' | 'Hit SL' | 'CLOSED';
   executedAt: string;
+  currentPrice?: number;
+  currentPnL?: number;
+  exitPrice?: number;
+  closeDate?: string;
+  closedAt?: string;
+  finalPnL?: number;
+  closeReason?: string;
+  pnlPercentage?: number;
 }
 
 interface AnalyticsData {
@@ -65,6 +74,39 @@ export default function Dashboard() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [actualEntryPrice, setActualEntryPrice] = useState<number>(0);
   const [positionSize, setPositionSize] = useState<string>('');
+
+  // Close Trade Modal State
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [selectedPortfolioItem, setSelectedPortfolioItem] = useState<PortfolioItem | null>(null);
+  const [exitPrice, setExitPrice] = useState<number>(0);
+  const [closeReason, setCloseReason] = useState<string>('Manual Close');
+
+  const handleCloseTradeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPortfolioItem) return;
+
+    try {
+      const res = await fetch('/api/portfolio', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedPortfolioItem._id,
+          exitPrice,
+          closeReason
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setIsCloseModalOpen(false);
+        await Promise.all([fetchPortfolio(), fetchAnalytics()]); // Refresh both
+      } else {
+        alert(json.error || 'فشلت عملية إغلاق الصفقة');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع');
+    }
+  };
 
   const fetchTrades = async () => {
     try {
@@ -173,6 +215,12 @@ export default function Dashboard() {
   const triggeredLosses = trades.filter(t => (t.status === 'CLOSED_LOSS' || t.status === 'Hit SL') && t.market === marketFilter);
   const activePortfolio = portfolio.filter(p => p.status === 'ACTIVE' && p.market === marketFilter);
 
+  const totalPortfolioValue = activePortfolio.reduce((sum, item) => {
+    const current = item.currentPrice || item.actualEntryPrice || 0;
+    const qty = item.quantity || (item.actualEntryPrice > 0 ? item.positionSize / item.actualEntryPrice : 0);
+    return sum + (current * qty);
+  }, 0);
+
   // Map and calculate mathematical metrics for active positions
   const activeTradesWithMetrics = rawActiveTrades.map(trade => {
     const metrics = calculateMetrics(trade);
@@ -247,7 +295,21 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
 
         {/* بطاقات الأداء (Premium Stat Cards) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-sans">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-sans">
+          {/* إجمالي قيمة المحفظة النشطة */}
+          <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
+            <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
+              <span>قيمة المحفظة النشطة / Portfolio Value</span>
+              <span>💰</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-neutral-500 block">القيمة الحالية (Current Value)</span>
+              <span className="text-xl font-bold text-white font-mono">
+                {formatPrice(totalPortfolioValue, marketFilter, '')}
+              </span>
+            </div>
+          </div>
+
           {/* نسبة النجاح */}
           <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
             <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
@@ -419,25 +481,51 @@ export default function Dashboard() {
                       <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                         <th className="p-4">الرمز</th>
                         <th className="p-4">سعر الدخول الفعلي</th>
+                        <th className="p-4">السعر الحالي</th>
                         <th className="p-4">القيمة المستثمرة</th>
+                        <th className="p-4">الربح/الخسارة</th>
                         <th className="p-4">الحالة</th>
                         <th className="p-4 text-left">تاريخ التنفيذ</th>
+                        <th className="p-4 text-center">الإجراء</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {activePortfolio.map(item => (
-                        <tr key={item._id} className="hover:bg-neutral-900/20 transition">
-                          <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                          <td className="p-4 text-neutral-200">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
-                          <td className="p-4 text-neutral-100">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
-                          <td className="p-4">
-                            <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
-                              مفتوح / ACTIVE
-                            </span>
-                          </td>
-                          <td className="p-4 text-left text-neutral-500">{formatDate(item.executedAt)}</td>
-                        </tr>
-                      ))}
+                      {activePortfolio.map(item => {
+                        const current = item.currentPrice || item.actualEntryPrice || 0;
+                        const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
+                        const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
+                        
+                        return (
+                          <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                            <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                            <td className="p-4 text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
+                            <td className="p-4 text-neutral-100">{formatPrice(current, item.market, item.symbol)}</td>
+                            <td className="p-4 text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
+                            <td className={`p-4 font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {formatPrice(pnl, item.market, item.symbol)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
+                                مفتوح / ACTIVE
+                              </span>
+                            </td>
+                            <td className="p-4 text-left text-neutral-500">{formatDate(item.executedAt)}</td>
+                            <td className="p-4 text-center">
+                              <button
+                                onClick={() => {
+                                  setSelectedPortfolioItem(item);
+                                  setExitPrice(current || item.actualEntryPrice);
+                                  setCloseReason('Manual Close');
+                                  setIsCloseModalOpen(true);
+                                }}
+                                className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer"
+                              >
+                                إغلاق الصفقة
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -538,7 +626,7 @@ export default function Dashboard() {
                   <table className="w-full border-collapse text-right text-xs">
                     <thead>
                       <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4">الالرمز</th>
+                        <th className="p-4">الرمز</th>
                         <th className="p-4">سعر الدخول</th>
                         <th className="p-4">سعر الخروج</th>
                         <th className="p-4">نسبة العائد (%)</th>
@@ -671,6 +759,69 @@ export default function Dashboard() {
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-600 text-neutral-400 hover:text-neutral-200 font-bold rounded transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Close Trade Modal */}
+      {isCloseModalOpen && selectedPortfolioItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-neutral-950 border border-neutral-900 rounded p-6 w-full max-w-md space-y-6 text-right" dir="rtl">
+            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider font-mono text-white">
+                إغلاق مركز / {selectedPortfolioItem.symbol}
+              </h3>
+              <button 
+                onClick={() => setIsCloseModalOpen(false)}
+                className="text-neutral-500 hover:text-neutral-300 text-xs font-mono cursor-pointer"
+              >
+                [إغلاق]
+              </button>
+            </div>
+
+            <form onSubmit={handleCloseTradeSubmit} className="space-y-4 text-xs font-mono">
+              <div className="space-y-1">
+                <label className="block text-neutral-400 font-bold">سعر الخروج ({selectedPortfolioItem.market === 'EGX' ? 'ج.م' : '$'})</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={exitPrice} 
+                  onChange={(e) => setExitPrice(Number(e.target.value))}
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 text-left font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-neutral-400 font-bold">سبب الإغلاق</label>
+                <select
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 font-mono cursor-pointer"
+                  required
+                >
+                  <option value="Manual Close">إغلاق يدوي / Manual Close</option>
+                  <option value="TP Hit">ضرب الهدف / TP Hit</option>
+                  <option value="SL Hit">ضرب وقف الخسارة / SL Hit</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="submit" 
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold tracking-wider rounded uppercase text-center transition cursor-pointer"
+                >
+                  تأكيد الإغلاق
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setIsCloseModalOpen(false)}
                   className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-600 text-neutral-400 hover:text-neutral-200 font-bold rounded transition cursor-pointer"
                 >
                   إلغاء

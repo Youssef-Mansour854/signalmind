@@ -89,36 +89,54 @@ class AsyncTradeTracker:
                 "updatedAt": now
             }
 
+            # Calculate quantity and currentPnL for updating
+            position_size = trade.get("positionSize", 0)
+            quantity = trade.get("quantity") or (position_size / entry_price if entry_price and entry_price > 0 else 0)
+            
+            # Save quantity to update_fields if it's not already in the document
+            if "quantity" not in trade and quantity > 0:
+                update_fields["quantity"] = round(quantity, 4)
+
             # Exit logic checks
             if take_profit and current_price >= take_profit:
                 update_fields["status"] = "Hit TP"
-                update_fields["exit_price"] = round(current_price, 4)
                 update_fields["exitPrice"] = round(current_price, 4)
-                update_fields["closed_at"] = now
+                update_fields["exit_price"] = round(current_price, 4)
+                update_fields["closeDate"] = now
                 update_fields["closedAt"] = now
+                update_fields["closed_at"] = now
+                update_fields["closeReason"] = "TP Hit"
                 if entry_price:
+                    update_fields["finalPnL"] = round((current_price - entry_price) * quantity, 4)
                     update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
 
                 await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
-                print(f"🎯 Closed WIN for {symbol}: price ${current_price:.2f} >= TP ${take_profit}")
+                print(f"[TP HIT] Closed WIN for {symbol}: price ${current_price:.2f} >= TP ${take_profit}")
                 closed_wins += 1
 
             elif stop_loss and current_price <= stop_loss:
                 update_fields["status"] = "Hit SL"
-                update_fields["exit_price"] = round(current_price, 4)
                 update_fields["exitPrice"] = round(current_price, 4)
-                update_fields["closed_at"] = now
+                update_fields["exit_price"] = round(current_price, 4)
+                update_fields["closeDate"] = now
                 update_fields["closedAt"] = now
+                update_fields["closed_at"] = now
+                update_fields["closeReason"] = "SL Hit"
                 if entry_price:
+                    update_fields["finalPnL"] = round((current_price - entry_price) * quantity, 4)
                     update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
 
                 await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
-                print(f"🔴 Closed LOSS for {symbol}: price ${current_price:.2f} <= SL ${stop_loss}")
+                print(f"[SL HIT] Closed LOSS for {symbol}: price ${current_price:.2f} <= SL ${stop_loss}")
                 closed_losses += 1
 
             else:
-                # Keep active and update current price and max price reached
+                # Keep active and update current price, currentPnL, and max price reached
                 update_fields["status"] = "ACTIVE"
+                if entry_price:
+                    update_fields["currentPnL"] = round((current_price - entry_price) * quantity, 4)
+                    update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
+                
                 max_price = max(trade.get("maxPriceReached", 0) or 0, current_price)
                 update_fields["maxPriceReached"] = round(max_price, 4)
                 

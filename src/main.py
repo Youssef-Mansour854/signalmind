@@ -176,10 +176,14 @@ async def main_async():
     now = datetime.datetime.now(datetime.timezone.utc)
     day_of_week = now.weekday() # Monday=0, ..., Sunday=6
 
-    # EGX Market (.CA): Friday (4) and Saturday (5)
-    # US Market: Saturday (5) and Sunday (6)
-    egx_open = day_of_week not in (4, 5)
-    us_open = day_of_week not in (5, 6)
+    # EGX Market is open Sunday-Thursday
+    # US Market is open Monday-Friday
+    # Sunday (6): only EGX stocks
+    # Monday-Thursday (0, 1, 2, 3): both EGX and US stocks
+    # Friday (4): only US stocks
+    # Saturday (5): closed (no stocks to analyze today)
+    egx_open = day_of_week in (6, 0, 1, 2, 3)
+    us_open = day_of_week in (0, 1, 2, 3, 4)
 
     if not egx_open and not us_open:
         print("[INFO] All markets are closed today. Skipping execution.")
@@ -291,6 +295,33 @@ async def main_async():
         print(f"Error logging to MongoDB: {e}")
 
     print(f"Finished. Analyzed: {total_stocks}, BUY signals: {buy_signals}, Failed: {failed_stocks}, Skipped: {skipped_stocks}")
+
+    # 4. Update Old Signal Prices Daily
+    print("Running daily signal price updater...")
+    try:
+        from price_updater import SignalPriceUpdater
+        updater = SignalPriceUpdater()
+        await updater.update_active_and_pending_signals()
+    except Exception as e:
+        print(f"Error running daily signal price updater: {e}")
+
+    # 5. Run Trade Tracker (auto-close on TP/SL and update current PnL)
+    print("Running active portfolio trade tracker...")
+    try:
+        from trade_tracker import AsyncTradeTracker
+        tracker = AsyncTradeTracker()
+        await tracker.run_tracking_cycle()
+    except Exception as e:
+        print(f"Error running portfolio trade tracker: {e}")
+
+    # 6. Run AI Feedback Loop (automatically after main completes)
+    print("Running AI self-assessment feedback loop...")
+    try:
+        from feedback_loop import AIFeedbackLoop
+        loop = AIFeedbackLoop()
+        await asyncio.to_thread(loop.run_weekly_assessment)
+    except Exception as e:
+        print(f"Error running AI feedback loop: {e}")
 
 def main():
     asyncio.run(main_async())

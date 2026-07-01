@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     // 2. Fetch closed portfolio trades (Actual User Performance)
     const portfolioQuery: any = {
-      status: { $in: ['CLOSED_WIN', 'CLOSED_LOSS'] },
+      status: { $in: ['CLOSED_WIN', 'CLOSED_LOSS', 'Hit TP', 'Hit SL', 'CLOSED'] },
       executedAt: { $gte: startDate }
     };
     if (market) {
@@ -55,10 +55,29 @@ export async function GET(request: Request) {
 
     // Calculate Actual Metrics
     const actualTotal = closedPortfolio.length;
-    const actualWins = closedPortfolio.filter(p => p.status === 'CLOSED_WIN').length;
+    const actualWins = closedPortfolio.filter(p => {
+      if (p.status === 'Hit TP' || p.status === 'CLOSED_WIN') return true;
+      if (p.status === 'Hit SL' || p.status === 'CLOSED_LOSS') return false;
+      // For status === 'CLOSED' (manual close)
+      const pnl = p.finalPnL !== undefined ? p.finalPnL : (p.pnlPercentage || 0);
+      return pnl > 0;
+    }).length;
     const actualWinRate = actualTotal > 0 ? Math.round((actualWins / actualTotal) * 100) : 0;
+    
     const actualAvgPnl = actualTotal > 0
-      ? Number((closedPortfolio.reduce((acc, curr) => acc + (curr.pnlPercentage || 0), 0) / actualTotal).toFixed(2))
+      ? Number((closedPortfolio.reduce((acc, curr) => {
+          let pnlPct = curr.pnlPercentage;
+          if (pnlPct === undefined) {
+            const entry = curr.actualEntryPrice;
+            const exit = curr.exitPrice;
+            if (entry > 0 && exit !== undefined) {
+              pnlPct = ((exit - entry) / entry) * 100;
+            } else {
+              pnlPct = 0;
+            }
+          }
+          return acc + pnlPct;
+        }, 0) / actualTotal).toFixed(2))
       : 0;
 
     return NextResponse.json({
