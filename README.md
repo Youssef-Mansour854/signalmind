@@ -35,9 +35,10 @@ Runs automatically every weekday (Monday-Friday) at **8:00 AM Cairo Time (UTC+2)
 1. Fork or push this repository to your GitHub account.
 2. Go to **Settings > Secrets and variables > Actions**.
 3. Create the following **New repository secrets**:
-   - `GEMINI_API_KEY`: Your Google Gemini API Key.
+   - `GROQ_API_KEY`: Your Groq API Key.
    - `TELEGRAM_BOT_TOKEN`: Your Telegram Bot Token.
    - `TELEGRAM_CHAT_ID`: Your Telegram Chat ID.
+   - `MONGODB_URI`: Your MongoDB connection string (e.g. MongoDB Atlas connection string).
 
 GitHub Actions will now automatically run the script every weekday at 8:00 AM Cairo time.
 

@@ -1,13 +1,22 @@
 import requests
 import datetime
 from typing import Dict, Any
+import zoneinfo
+
+cairo_tz = zoneinfo.ZoneInfo("Africa/Cairo")
 
 class TelegramSender:
     def __init__(self, config):
         self.config = config
         self.bot_token = config.TELEGRAM_BOT_TOKEN
         self.chat_id = config.TELEGRAM_CHAT_ID
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        if self.bot_token and self.chat_id:
+            self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        else:
+            self.base_url = None
+
+    def has_credentials(self) -> bool:
+        return bool(self.bot_token and self.chat_id and self.base_url)
 
     def format_message(self, stock_data: Dict[str, Any], analysis: Dict[str, Any]) -> str:
         """Formats the analysis into the required Telegram message layout."""
@@ -17,9 +26,8 @@ class TelegramSender:
         risk = analysis.get('risk', 'Medium')
         risk_icon = "⚠️" if risk == 'High' else "📉" if risk == 'Low' else "⚖️"
         
-        # Calculate current Cairo time (UTC+2)
-        # For simplicity without pytz, we'll use UTC+2 directly
-        cairo_time = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        # Calculate current Cairo time using Africa/Cairo timezone
+        cairo_time = datetime.datetime.now(cairo_tz)
         time_str = cairo_time.strftime("%Y-%m-%d %H:%M:%S")
 
         message = f"""---
@@ -42,11 +50,15 @@ class TelegramSender:
 
     def send_message(self, text: str) -> bool:
         """Sends a text message to the configured Telegram chat."""
+        if not self.has_credentials():
+            print("[INFO] Telegram credentials not found. Skipping Telegram alert. Signals will only be saved to MongoDB.")
+            return True
+            
         try:
             payload = {
                 "chat_id": self.chat_id,
                 "text": text,
-                "parse_mode": "HTML" # allow basic formatting if needed
+                "parse_mode": "HTML"
             }
             response = requests.post(self.base_url, json=payload)
             response.raise_for_status()
@@ -57,7 +69,11 @@ class TelegramSender:
 
     def send_summary(self, total: int, buy_count: int, buy_symbols: list) -> bool:
         """Sends a final summary report to Telegram."""
-        cairo_time = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        if not self.has_credentials():
+            print("[INFO] Telegram credentials not found. Skipping daily Telegram summary.")
+            return True
+
+        cairo_time = datetime.datetime.now(cairo_tz)
         date_str = cairo_time.strftime("%Y-%m-%d")
         symbols_str = ", ".join(buy_symbols) if buy_symbols else "None"
         
@@ -72,5 +88,9 @@ class TelegramSender:
 
     def send_error_alert(self, total: int, failed: int) -> bool:
         """Sends an alert if failure threshold is reached."""
+        if not self.has_credentials():
+            print("[INFO] Telegram credentials not found. Skipping error alert.")
+            return True
+
         text = f"🚨 <b>SignalMind Alert</b> 🚨\nMore than 50% of stocks failed processing today.\nTotal: {total}, Failed: {failed}"
         return self.send_message(text)

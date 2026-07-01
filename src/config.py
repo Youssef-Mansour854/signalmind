@@ -1,5 +1,9 @@
 import os
 from typing import List, Dict
+from dotenv import load_dotenv
+
+# Load environmental variables from .env file at module load time
+load_dotenv()
 
 # Environment variables
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -58,8 +62,8 @@ INDICATOR_PARAMS = {
     'sup_res_period': 30
 }
 
-# Anthropic API Settings
-GEMINI_MODEL = "gemini-2.0-flash"
+# Groq API Settings
+GROQ_MODEL = "llama-3.3-70b-versatile"
 API_DELAY_SECONDS = 1  # Delay to avoid rate limits
 
 # Telegram Settings
@@ -70,10 +74,10 @@ def validate_config():
     missing_vars = []
     if not GROQ_API_KEY:
         missing_vars.append("GROQ_API_KEY")
-    if not TELEGRAM_BOT_TOKEN:
-        missing_vars.append("TELEGRAM_BOT_TOKEN")
-    if not TELEGRAM_CHAT_ID:
-        missing_vars.append("TELEGRAM_CHAT_ID")
+    
+    # Telegram credentials are now optional. Print a warning instead of raising an error.
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("[INFO] Telegram credentials (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID) are missing. Telegram notifications will be disabled.")
         
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")

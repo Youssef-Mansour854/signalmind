@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+
+# Environment Variables / Secrets
+.env
+.env*.local
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Web dependencies and build outputs
+web/node_modules/
+web/.next/
+
+# Logs
+*.txt

@@ -161,7 +161,7 @@ class StockAnalyzer:
         """Full pipeline for a single stock."""
         df = self.fetch_data(symbol)
         if df is None:
-            return None
+            raise ValueError(f"Failed to fetch data for {symbol}")
 
         df = self.calculate_indicators(df)
         latest_data = self.get_latest_data(df)
