@@ -2,9 +2,10 @@ name: SignalMind Cloud Pipeline
 
 on:
   schedule:
-    # Runs daily at 05:00 UTC (Sunday-Thursday for EGX, Monday-Friday for US)
-    - cron: "0 5 * * 0-4"  # EGX
-    - cron: "0 5 * * 1-5"  # US
+    # Runs daily at 05:00 UTC
+    - cron: "0 5 * * 1-4"  # EGX + US (Mon-Thu)
+    - cron: "0 5 * * 5"    # US only (Fri)
+    - cron: "0 5 * * 0"    # EGX only (Sun)
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:

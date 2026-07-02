@@ -109,35 +109,57 @@ class AIFeedbackLoop:
         """
 
         # 4. Call LLM for self-assessment
+        # 4. Call LLM for self-assessment
+        insights = None
+        retries = 3
+        for attempt in range(retries):
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a quantitative finance self-assessment system. You output ONLY valid raw JSON."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 1500
+                }
+                response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
+                
+                if response.status_code == 429 and attempt < retries - 1:
+                    import time
+                    print(f"[INFO] Groq 429 rate limit hit in feedback loop. Retrying in 15.0s (attempt {attempt+1}/{retries})...")
+                    time.sleep(15.0)
+                    continue
+                
+                response.raise_for_status()
+                
+                response_json = response.json()
+                content = response_json["choices"][0]["message"]["content"]
+                content = content.replace("```json", "").replace("```", "").strip()
+                
+                insights = json.loads(content)
+                break
+            except Exception as e:
+                if attempt < retries - 1:
+                    import time
+                    print(f"Error in Groq call, retrying in 15.0s: {e}")
+                    time.sleep(15.0)
+                    continue
+                else:
+                    print(f"Error in Weekly AI Feedback Loop: {e}")
+                    return
+
         try:
-            headers = {
-                "Authorization": f"Bearer {self.groq_api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a quantitative finance self-assessment system. You output ONLY valid raw JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "temperature": 0.2,
-                "max_tokens": 1500
-            }
-            response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-            response.raise_for_status()
-            
-            response_json = response.json()
-            content = response_json["choices"][0]["message"]["content"]
-            content = content.replace("```json", "").replace("```", "").strip()
-            
-            insights = json.loads(content)
-            
             # Save feedback log to DB
             feedback_doc = {
                 "weekStartDate": one_week_ago,
@@ -162,7 +184,7 @@ class AIFeedbackLoop:
             print("Successfully saved Weekly AI Feedback & Optimization Parameters.")
             
         except Exception as e:
-            print(f"Error in Weekly AI Feedback Loop: {e}")
+            print(f"Error saving to DB: {e}")
 
 if __name__ == "__main__":
     loop = AIFeedbackLoop()

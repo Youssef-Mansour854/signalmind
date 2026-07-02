@@ -16,7 +16,7 @@ import aiohttp
 # Load env variables at startup
 load_dotenv()
 
-async def process_single_stock(symbol: str, index: int, total_stocks: int, session: aiohttp.ClientSession, analyzer, groq, telegram, ranking_engine, signals_col, now):
+async def process_single_stock(symbol: str, index: int, total_stocks: int, session: aiohttp.ClientSession, analyzer, groq, telegram, ranking_engine, signals_col, now, groq_lock=None):
     print(f"[{index}/{total_stocks}] Analyzing {symbol}...")
     try:
         # Determine market
@@ -34,7 +34,29 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
             return {"status": "skipped", "symbol": symbol}
 
         # 2. Get AI Analysis
-        analysis = await groq.analyze(stock_data, session)
+        analysis = None
+        retries = 3
+        for attempt in range(retries):
+            try:
+                if groq_lock:
+                    async with groq_lock:
+                        try:
+                            analysis = await groq.analyze(stock_data, session)
+                            await asyncio.sleep(4.0)
+                        except Exception as inner_e:
+                            if "429" in str(inner_e):
+                                print(f"[INFO] Groq 429 rate limit hit for {symbol}. Cooling down for 15.0s inside lock...")
+                                await asyncio.sleep(15.0)
+                            raise inner_e
+                else:
+                    analysis = await groq.analyze(stock_data, session)
+                    await asyncio.sleep(4.0)
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < retries - 1:
+                    print(f"[INFO] Retrying {symbol} (attempt {attempt+1}/{retries})...")
+                else:
+                    raise e
         
         if not analysis:
             print(f"Failed to get AI analysis for {symbol}.")
@@ -206,29 +228,37 @@ async def main_async():
     total_stocks = len(stocks_to_analyze)
     # Concurrency limiter
     semaphore = asyncio.Semaphore(1)
+    groq_lock = asyncio.Lock()
 
     print(f"Planning to analyze {total_stocks} stocks sequentially...")
     
+    async def worker(symbol, index, session):
+        async with semaphore:
+            return await process_single_stock(
+                symbol=symbol,
+                index=index,
+                total_stocks=total_stocks,
+                session=session,
+                analyzer=analyzer,
+                groq=groq,
+                telegram=telegram,
+                ranking_engine=ranking_engine,
+                signals_col=signals_col,
+                now=now,
+                groq_lock=groq_lock
+            )
+
     results = []
     async with aiohttp.ClientSession() as session:
+        tasks = []
         for i, symbol in enumerate(stocks_to_analyze):
-            async with semaphore:
-                res = await process_single_stock(
-                    symbol=symbol,
-                    index=i+1,
-                    total_stocks=total_stocks,
-                    session=session,
-                    analyzer=analyzer,
-                    groq=groq,
-                    telegram=telegram,
-                    ranking_engine=ranking_engine,
-                    signals_col=signals_col,
-                    now=now
-                )
-            results.append(res)
-            # Sleep 15.0s to pace requests under Groq's limits, except for the last stock
-            if i < total_stocks - 1:
-                await asyncio.sleep(15.0)
+            # Sleep 2.0s between spawning tasks to pace requests
+            if i > 0:
+                await asyncio.sleep(2.0)
+            task = asyncio.create_task(worker(symbol, i + 1, session))
+            tasks.append(task)
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
     failed_stocks = 0
     skipped_stocks = 0
@@ -319,12 +349,69 @@ async def main_async():
     try:
         from feedback_loop import AIFeedbackLoop
         loop = AIFeedbackLoop()
+        await asyncio.sleep(10.0)  # Sleep 10s to clear rate limits
         await asyncio.to_thread(loop.run_weekly_assessment)
     except Exception as e:
         print(f"Error running AI feedback loop: {e}")
 
+LOCK_FILE = "signalmind.lock"
+
+def is_process_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import subprocess
+        try:
+            output = subprocess.check_output(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                creationflags=subprocess.CREATE_NO_WINDOW
+            ).decode("utf-8", errors="ignore")
+            return str(pid) in output
+        except Exception:
+            return True
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
 def main():
-    asyncio.run(main_async())
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, "r") as f:
+                content = f.read().strip()
+                if content.isdigit():
+                    pid = int(content)
+                    if is_process_running(pid):
+                        print(f"[ERROR] Another instance of SignalMind is already running (PID: {pid}). Exiting.")
+                        sys.exit(1)
+                    else:
+                        print(f"[INFO] Found stale lock file for PID {pid} (process not running). Overwriting...")
+                else:
+                    print("[INFO] Found invalid lock file. Overwriting...")
+        except Exception as e:
+            print(f"[WARNING] Could not read existing lock file: {e}. Overwriting...")
+
+    # Create the lock file
+    try:
+        with open(LOCK_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception as e:
+        print(f"[ERROR] Could not create lock file: {e}")
+        sys.exit(1)
+
+    try:
+        asyncio.run(main_async())
+    finally:
+        if os.path.exists(LOCK_FILE):
+            try:
+                with open(LOCK_FILE, "r") as f:
+                    content = f.read().strip()
+                if content.isdigit() and int(content) == os.getpid():
+                    os.remove(LOCK_FILE)
+            except Exception as e:
+                print(f"[ERROR] Could not remove lock file: {e}")
 
 if __name__ == "__main__":
     main()
