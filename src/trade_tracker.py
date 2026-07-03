@@ -59,6 +59,8 @@ class AsyncTradeTracker:
         closed_losses = 0
 
         for trade in active_trades:
+            if trade.get("status") == "CLOSED":
+                continue
             symbol = trade["symbol"]
             
             # Fetch parameters from corresponding signal document

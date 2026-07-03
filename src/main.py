@@ -344,15 +344,18 @@ async def main_async():
     except Exception as e:
         print(f"Error running portfolio trade tracker: {e}")
 
-    # 6. Run AI Feedback Loop (automatically after main completes)
-    print("Running AI self-assessment feedback loop...")
-    try:
-        from feedback_loop import AIFeedbackLoop
-        loop = AIFeedbackLoop()
-        await asyncio.sleep(10.0)  # Sleep 10s to clear rate limits
-        await asyncio.to_thread(loop.run_weekly_assessment)
-    except Exception as e:
-        print(f"Error running AI feedback loop: {e}")
+    # 6. Run AI Feedback Loop (automatically after main completes on Fridays)
+    if day_of_week == 4:
+        print("Running AI self-assessment feedback loop...")
+        try:
+            from feedback_loop import AIFeedbackLoop
+            loop = AIFeedbackLoop()
+            await asyncio.sleep(10.0)  # Sleep 10s to clear rate limits
+            await asyncio.to_thread(loop.run_weekly_assessment)
+        except Exception as e:
+            print(f"Error running AI feedback loop: {e}")
+    else:
+        print(f"Today is not Friday (day_of_week: {day_of_week}). Skipping AI self-assessment feedback loop.")
 
 LOCK_FILE = "signalmind.lock"
 

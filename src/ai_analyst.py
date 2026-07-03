@@ -48,25 +48,14 @@ class GroqAnalyst:
             adjustments += f"Failure Pattern Identified: {fb.get('failureInsights', 'None')}\n"
             adjustments += f"Success Pattern Identified: {fb.get('successInsights', 'None')}\n"
             
-            adjustments += "\nMandatory Prompt Guidelines (Adhere strictly to bypass previous mistakes):\n"
-            
             # Apply dynamic logic based on weights
             rsi_adj = weights.get("rsiWeightAdjustment", 0)
             vol_adj = weights.get("volumeWeightAdjustment", 0)
             trend_adj = weights.get("trendWeightAdjustment", 0)
 
-            if rsi_adj < -2.0:
-                adjustments += "- TIGHTEN RSI ENTRY: Do not approve BUY signals for assets with standard RSI. Require oversold conditions (< 40).\n"
-            elif rsi_adj > 2.0:
-                adjustments += "- RELAX RSI ENTRY: You may suggest BUY signals even if RSI is moderately high (up to 65) if volume is high.\n"
-                
-            if vol_adj > 2.0:
-                adjustments += "- STRICT VOLUME CONFLUENCE: You must reject BUY signals where trading volume is not expanding relative to average volume (volume must be > 1.2x volume_avg).\n"
-                
-            if trend_adj > 2.0:
-                adjustments += "- STRICT MACRO TREND CONFLUENCE: Ensure the asset price is safely trading above the EMA 50 and EMA 200 lines. Avoid bottoms-picking.\n"
-            elif trend_adj < -2.0:
-                adjustments += "- LOWER TREND FILTER: Be more open to reversal signals near major support lines, even if macro averages are flat.\n"
+            adjustments += f"\nDynamic ML Feedback Weights applied for this analysis (Scale -10 to +10): "
+            adjustments += f"RSI Adjustment: {rsi_adj}, Volume Adjustment: {vol_adj}, Trend Adjustment: {trend_adj}. "
+            adjustments += "Adjust your strictness based exactly on the magnitude of these mathematical weights.\n"
 
             return adjustments
         except Exception as e:

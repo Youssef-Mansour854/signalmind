@@ -41,7 +41,7 @@ async def run_briefer():
     # Fetch trades closed today
     closed_trades_today = await asyncio.to_thread(
         lambda: list(portfolio_col.find({
-            "status": {"$in": ["Hit TP", "Hit SL"]},
+            "status": {"$in": ["Hit TP", "Hit SL", "CLOSED"]},
             "closedAt": {"$gte": today_start}
         }))
     )
@@ -62,7 +62,7 @@ async def run_briefer():
             exit_price = trade.get("exitPrice") or trade.get("exit_price") or 0
             pnl = trade.get("pnlPercentage") or 0
             
-            icon = "🟢" if "TP" in status else "🔴"
+            icon = "🟢" if "TP" in status or (status == "CLOSED" and pnl > 0) else "🔴"
             pnl_sign = "+" if pnl > 0 else ""
             message += f"{icon} <b>{symbol}</b>: {status} at ${exit_price:.2f} ({pnl_sign}{pnl:.2f}%)\n"
     else:
@@ -93,8 +93,8 @@ async def run_briefer():
     message += "\n"
 
     # Summary Section
-    wins_today = sum(1 for t in closed_trades_today if "TP" in t["status"])
-    losses_today = sum(1 for t in closed_trades_today if "SL" in t["status"])
+    wins_today = sum(1 for t in closed_trades_today if "TP" in t["status"] or (t["status"] == "CLOSED" and (t.get("pnlPercentage") or 0) > 0))
+    losses_today = sum(1 for t in closed_trades_today if "SL" in t["status"] or (t["status"] == "CLOSED" and (t.get("pnlPercentage") or 0) <= 0))
     
     message += "📊 <b>Summary:</b>\n"
     message += f"• Active Positions: {len(active_trades)}\n"
