@@ -66,6 +66,9 @@ interface HistoryItem {
   entryPrice: number;
   exitPrice: number;
   pnlPercentage: number;
+  cashPnL: number;
+  maxPeakPercentage: number;
+  holdingDuration: string;
   status: string;
   closedAt: string;
 }
@@ -757,38 +760,41 @@ export default function Dashboard() {
                       <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                         <th className="p-4 text-right">السهم</th>
                         <th className="p-4 text-right">المحفظة</th>
-                        <th className="p-4 text-right">سعر الدخول</th>
-                        <th className="p-4 text-right">سعر الإغلاق</th>
-                        <th className="p-4 text-right">الربح / الخسارة</th>
-                        <th className="p-4 text-right">حالة الإغلاق</th>
+                        <th className="p-4 text-right">مدة الاحتفاظ</th>
+                        <th className="p-4 text-right">سعر الدخول ➔ الإغلاق</th>
+                        <th className="p-4 text-right">الربح النقدي</th>
+                        <th className="p-4 text-right">العائد %</th>
+                        <th className="p-4 text-right">أقصى صعود</th>
                         <th className="p-4 text-left">تاريخ الإغلاق</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
                       {filteredHistory.map(item => {
                         const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
+                        const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
                         return (
                           <tr key={item._id} className="hover:bg-neutral-900/20 transition">
                             <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
                             <td className="p-4 text-neutral-300">
                               {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
                             </td>
-                            <td className="p-4 text-neutral-400">{formatPrice(item.entryPrice, item.market, item.symbol)}</td>
-                            <td className="p-4 text-neutral-300">{formatPrice(item.exitPrice, item.market, item.symbol)}</td>
+                            <td className="p-4 text-neutral-400 font-mono">{item.holdingDuration}</td>
+                            <td className="p-4 text-neutral-300 font-mono" dir="ltr">
+                              {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
+                            </td>
+                            <td className="p-4 font-bold font-mono">
+                              <span dir="ltr" className={`inline-block ${cashPnlColor}`}>
+                                {item.cashPnL > 0 ? '+' : ''}{formatPrice(item.cashPnL, item.market, item.symbol)}
+                              </span>
+                            </td>
                             <td className="p-4 font-bold">
                               <span dir="ltr" className={`inline-block ${pnlColor}`}>
                                 {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
                               </span>
                             </td>
-                            <td className="p-4">
-                              <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${
-                                item.status === 'Hit TP' 
-                                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' 
-                                  : item.status === 'Hit SL'
-                                  ? 'bg-rose-950/40 text-rose-400 border-rose-900/30'
-                                  : 'bg-neutral-900 text-neutral-450 border-neutral-800'
-                              }`}>
-                                {item.status === 'Hit TP' ? 'Hit TP' : (item.status === 'Hit SL' ? 'Hit SL' : 'Manual Close')}
+                            <td className="p-4 font-bold font-mono text-emerald-400/90">
+                              <span dir="ltr" className="inline-block">
+                                +{item.maxPeakPercentage.toFixed(2)}%
                               </span>
                             </td>
                             <td className="p-4 text-left text-neutral-500">{formatDate(item.closedAt)}</td>
