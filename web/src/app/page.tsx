@@ -320,13 +320,13 @@ export default function Dashboard() {
               <div>
                 <span className="text-[10px] text-neutral-500 block">الفعلي (Actual)</span>
                 <span className="text-xl font-bold text-white font-mono">
-                  {analytics?.actual.winRate || 0}%
+                  <span dir="ltr" className="inline-block">{analytics?.actual.winRate || 0}%</span>
                 </span>
               </div>
               <div className="border-r border-neutral-900 pr-4">
                 <span className="text-[10px] text-neutral-500 block">الافتراضي (AI)</span>
                 <span className="text-xl font-bold text-neutral-400 font-mono">
-                  {analytics?.shadow.winRate || 0}%
+                  <span dir="ltr" className="inline-block">{analytics?.shadow.winRate || 0}%</span>
                 </span>
               </div>
             </div>
@@ -366,7 +366,7 @@ export default function Dashboard() {
                 <span className={`text-xl font-bold font-mono ${
                   (analytics?.actual.avgPnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
-                  {(analytics?.actual.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.actual.avgPnl || 0}%
+                  <span dir="ltr" className="inline-block">{(analytics?.actual.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.actual.avgPnl || 0}%</span>
                 </span>
               </div>
               <div className="border-r border-neutral-900 pr-4">
@@ -374,7 +374,7 @@ export default function Dashboard() {
                 <span className={`text-xl font-bold font-mono ${
                   (analytics?.shadow.avgPnl || 0) >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'
                 }`}>
-                  {(analytics?.shadow.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.shadow.avgPnl || 0}%
+                  <span dir="ltr" className="inline-block">{(analytics?.shadow.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.shadow.avgPnl || 0}%</span>
                 </span>
               </div>
             </div>
@@ -502,7 +502,10 @@ export default function Dashboard() {
                             <td className="p-4 text-neutral-100">{formatPrice(current, item.market, item.symbol)}</td>
                             <td className="p-4 text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
                             <td className={`p-4 font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {formatPrice(pnl, item.market, item.symbol)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                              {formatPrice(pnl, item.market, item.symbol)}{' '}
+                              <span dir="ltr" className="inline-block">
+                                ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                              </span>
                             </td>
                             <td className="p-4">
                               <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
@@ -565,7 +568,11 @@ export default function Dashboard() {
                           <td className="p-4 font-bold text-white tracking-wide">
                             <div>{trade.symbol}</div>
                             <div className="text-[10px] text-neutral-500 mt-1 font-mono">
-                              عائد: +{trade.expectedProfitPct.toFixed(1)}% | RRR: {trade.rrr.toFixed(2)}
+                              عائد:{' '}
+                              <span dir="ltr" className="inline-block">
+                                +{trade.expectedProfitPct.toFixed(1)}%
+                              </span>{' '}
+                              | RRR: {trade.rrr.toFixed(2)}
                             </div>
                             <div className="mt-1">
                               {trade.status === 'Pending' && (
@@ -584,7 +591,7 @@ export default function Dashboard() {
                           <td className="p-4 text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
                           <td className="p-4 text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
                           <td className="p-4 text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
-                          <td className="p-4 leading-relaxed text-neutral-300 font-light">
+                          <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
                             {trade.explanationArabic}
                           </td>
                           <td className="p-4 text-center">
@@ -642,7 +649,7 @@ export default function Dashboard() {
                             <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
                             <td className="p-4 text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
                             <td className="p-4">
-                              <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
+                              <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
                                 +{trade.pnlPercentage || 0}%
                               </span>
                             </td>
@@ -690,7 +697,7 @@ export default function Dashboard() {
                             <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
                             <td className="p-4 text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
                             <td className="p-4">
-                              <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
+                              <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
                                 {trade.pnlPercentage || 0}%
                               </span>
                             </td>

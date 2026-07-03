@@ -65,16 +65,23 @@ class SignalPriceUpdater:
             try:
                 if len(symbols) == 1:
                     current_price = data["Close"].dropna().iloc[-1]
+                    high_price = data["High"].dropna().iloc[-1]
+                    low_price = data["Low"].dropna().iloc[-1]
                 else:
                     current_price = data[symbol]["Close"].dropna().iloc[-1]
+                    high_price = data[symbol]["High"].dropna().iloc[-1]
+                    low_price = data[symbol]["Low"].dropna().iloc[-1]
             except Exception as e:
-                print(f"Failed to extract current price for signal {symbol}: {e}")
+                print(f"Failed to extract price data for signal {symbol}: {e}")
                 continue
 
             if current_price is None or str(current_price) == 'nan':
                 continue
 
             current_price = float(current_price)
+            high_price = float(high_price) if high_price is not None and str(high_price) != 'nan' else current_price
+            low_price = float(low_price) if low_price is not None and str(low_price) != 'nan' else current_price
+
             update_fields = {
                 "currentPrice": round(current_price, 4),
                 "updatedAt": now
@@ -93,21 +100,41 @@ class SignalPriceUpdater:
 
             # Logic for target hits (Active/Pending -> Hit TP/SL)
             if new_status in ("Active", "Pending"):
-                if take_profit and current_price >= take_profit:
-                    update_fields["status"] = "Hit TP"
-                    update_fields["closedAt"] = now
-                    if entry_price > 0:
-                        update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
-                    print(f"[TP HIT] Signal {symbol} Hit TP! price {current_price:.2f} >= TP {take_profit:.2f}")
-                elif stop_loss and current_price <= stop_loss:
-                    update_fields["status"] = "Hit SL"
-                    update_fields["closedAt"] = now
-                    if entry_price > 0:
-                        update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
-                    print(f"[SL HIT] Signal {symbol} Hit SL! price {current_price:.2f} <= SL {stop_loss:.2f}")
+                tp_hit = bool(take_profit and high_price >= take_profit)
+                sl_hit = bool(stop_loss and low_price <= stop_loss)
+                
+                if tp_hit and sl_hit:
+                    tp_margin = abs(take_profit - entry_price)
+                    sl_margin = abs(entry_price - stop_loss)
+                    if tp_margin < sl_margin:
+                        hit_tp = True
+                        hit_sl = False
+                    else:
+                        hit_tp = False
+                        hit_sl = True
                 else:
-                    # Update max price reached
-                    update_fields["maxPriceReached"] = round(max(max_price_reached, current_price), 4)
+                    hit_tp = tp_hit
+                    hit_sl = sl_hit
+
+                if hit_tp:
+                    exit_val = float(take_profit)
+                    update_fields["status"] = "Hit TP"
+                    update_fields["currentPrice"] = round(exit_val, 4)
+                    update_fields["closedAt"] = now
+                    if entry_price > 0:
+                        update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
+                    print(f"[TP HIT] Signal {symbol} Hit TP! High: {high_price:.2f} >= TP {take_profit:.2f}")
+                elif hit_sl:
+                    exit_val = float(stop_loss)
+                    update_fields["status"] = "Hit SL"
+                    update_fields["currentPrice"] = round(exit_val, 4)
+                    update_fields["closedAt"] = now
+                    if entry_price > 0:
+                        update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
+                    print(f"[SL HIT] Signal {symbol} Hit SL! Low: {low_price:.2f} <= SL {stop_loss:.2f}")
+                else:
+                    # Update max price reached using daily High
+                    update_fields["maxPriceReached"] = round(max(max_price_reached, high_price), 4)
 
             # Update DB
             await asyncio.to_thread(signals_col.update_one, {"_id": sig["_id"]}, {"$set": update_fields})
