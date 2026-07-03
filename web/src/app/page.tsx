@@ -58,10 +58,23 @@ interface AnalyticsData {
   };
 }
 
+interface HistoryItem {
+  _id: string;
+  symbol: string;
+  market: 'US' | 'EGX';
+  source: 'AI' | 'Actual';
+  entryPrice: number;
+  exitPrice: number;
+  pnlPercentage: number;
+  status: string;
+  closedAt: string;
+}
+
 export default function Dashboard() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   
   const [marketFilter, setMarketFilter] = useState<'EGX' | 'US'>('EGX');
   const [timeframe, setTimeframe] = useState<string>('all');
@@ -99,7 +112,7 @@ export default function Dashboard() {
       const json = await res.json();
       if (json.success) {
         setIsCloseModalOpen(false);
-        await Promise.all([fetchPortfolio(), fetchAnalytics()]); // Refresh both
+        await Promise.all([fetchPortfolio(), fetchAnalytics(), fetchHistory()]); // Refresh all
       } else {
         alert(json.error || 'فشلت عملية إغلاق الصفقة');
       }
@@ -146,9 +159,21 @@ export default function Dashboard() {
     }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/history');
+      const json = await res.json();
+      if (json.success) {
+        setHistory(json.data);
+      }
+    } catch (err) {
+      console.error('Error fetching history:', err);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
-    await Promise.all([fetchTrades(), fetchPortfolio(), fetchAnalytics()]);
+    await Promise.all([fetchTrades(), fetchPortfolio(), fetchAnalytics(), fetchHistory()]);
     setLoading(false);
   };
 
@@ -214,6 +239,7 @@ export default function Dashboard() {
   const realizedWins = trades.filter(t => (t.status === 'CLOSED_WIN' || t.status === 'Hit TP') && t.market === marketFilter);
   const triggeredLosses = trades.filter(t => (t.status === 'CLOSED_LOSS' || t.status === 'Hit SL') && t.market === marketFilter);
   const activePortfolio = portfolio.filter(p => p.status === 'ACTIVE' && p.market === marketFilter);
+  const filteredHistory = history.filter(item => item.market === marketFilter);
 
   const totalPortfolioValue = activePortfolio.reduce((sum, item) => {
     const current = item.currentPrice || item.actualEntryPrice || 0;
@@ -702,6 +728,70 @@ export default function Dashboard() {
                               </span>
                             </td>
                             <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {/* 4. Closed Trades History Table */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+                  <span>[ سجل الصفقات المغلقة ]</span>
+                  <span className="text-xs text-neutral-500 font-normal">({filteredHistory.length})</span>
+                </h2>
+              </div>
+
+              {filteredHistory.length === 0 ? (
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                  لا توجد صفقات مغلقة في هذا السوق بعد.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-neutral-900 rounded">
+                  <table className="w-full border-collapse text-right text-xs">
+                    <thead>
+                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <th className="p-4 text-right">السهم</th>
+                        <th className="p-4 text-right">المحفظة</th>
+                        <th className="p-4 text-right">سعر الدخول</th>
+                        <th className="p-4 text-right">سعر الإغلاق</th>
+                        <th className="p-4 text-right">الربح / الخسارة</th>
+                        <th className="p-4 text-right">حالة الإغلاق</th>
+                        <th className="p-4 text-left">تاريخ الإغلاق</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      {filteredHistory.map(item => {
+                        const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
+                        return (
+                          <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                            <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                            <td className="p-4 text-neutral-300">
+                              {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
+                            </td>
+                            <td className="p-4 text-neutral-400">{formatPrice(item.entryPrice, item.market, item.symbol)}</td>
+                            <td className="p-4 text-neutral-300">{formatPrice(item.exitPrice, item.market, item.symbol)}</td>
+                            <td className="p-4 font-bold">
+                              <span dir="ltr" className={`inline-block ${pnlColor}`}>
+                                {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded border ${
+                                item.status === 'Hit TP' 
+                                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' 
+                                  : item.status === 'Hit SL'
+                                  ? 'bg-rose-950/40 text-rose-400 border-rose-900/30'
+                                  : 'bg-neutral-900 text-neutral-450 border-neutral-800'
+                              }`}>
+                                {item.status === 'Hit TP' ? 'Hit TP' : (item.status === 'Hit SL' ? 'Hit SL' : 'Manual Close')}
+                              </span>
+                            </td>
+                            <td className="p-4 text-left text-neutral-500">{formatDate(item.closedAt)}</td>
                           </tr>
                         );
                       })}
