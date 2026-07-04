@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
     // 1. Fetch closed signals (AI Shadow Performance)
     const signalsQuery: any = {
-      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED_WIN', 'CLOSED_LOSS'] },
+      status: { $in: ['Hit TP', 'Hit SL'] },
       createdAt: { $gte: startDate }
     };
     if (market) {
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
     // 2. Fetch closed portfolio trades (Actual User Performance)
     const portfolioQuery: any = {
-      status: { $in: ['CLOSED_WIN', 'CLOSED_LOSS', 'Hit TP', 'Hit SL', 'CLOSED'] },
+      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] },
       executedAt: { $gte: startDate }
     };
     if (market) {
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
     // Calculate Shadow Metrics
     const shadowTotal = closedSignals.length;
-    const shadowWins = closedSignals.filter(s => s.status === 'Hit TP' || s.status === 'CLOSED_WIN').length;
+    const shadowWins = closedSignals.filter(s => s.status === 'Hit TP').length;
     const shadowWinRate = shadowTotal > 0 ? Math.round((shadowWins / shadowTotal) * 100) : 0;
     const shadowAvgPnl = shadowTotal > 0 
       ? Number((closedSignals.reduce((acc, curr) => acc + (curr.pnlPercentage || 0), 0) / shadowTotal).toFixed(2))
@@ -56,8 +56,8 @@ export async function GET(request: Request) {
     // Calculate Actual Metrics
     const actualTotal = closedPortfolio.length;
     const actualWins = closedPortfolio.filter(p => {
-      if (p.status === 'Hit TP' || p.status === 'CLOSED_WIN') return true;
-      if (p.status === 'Hit SL' || p.status === 'CLOSED_LOSS') return false;
+      if (p.status === 'Hit TP') return true;
+      if (p.status === 'Hit SL') return false;
       // For status === 'CLOSED' (manual close)
       const pnl = p.finalPnL !== undefined ? p.finalPnL : (p.pnlPercentage || 0);
       return pnl > 0;

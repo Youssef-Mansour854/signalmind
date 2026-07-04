@@ -72,13 +72,23 @@ class StockAnalyzer:
             df['Close'], window=self.params['ema_fast']
         ).ema_indicator()
 
-        df['EMA_50'] = ta.trend.EMAIndicator(
-            df['Close'], window=50
-        ).ema_indicator()
+        # EMA 50
+        if len(df) >= 50:
+            df['EMA_50'] = ta.trend.EMAIndicator(
+                df['Close'], window=50
+            ).ema_indicator()
+        else:
+            df['EMA_50'] = None
+            print(f"[WARNING] Not enough data to calculate EMA_50 (length: {len(df)})")
 
-        df['EMA_200'] = ta.trend.EMAIndicator(
-            df['Close'], window=200
-        ).ema_indicator()
+        # EMA 200
+        if len(df) >= 200:
+            df['EMA_200'] = ta.trend.EMAIndicator(
+                df['Close'], window=200
+            ).ema_indicator()
+        else:
+            df['EMA_200'] = None
+            print(f"[WARNING] Not enough data to calculate EMA_200 (length: {len(df)})")
 
         # Volume Analysis
         df['Volume_Avg'] = df['Volume'].rolling(window=self.params['volume_avg_period']).mean()
@@ -152,8 +162,12 @@ class StockAnalyzer:
         ema_50 = data.get('ema_50')
         ema_200 = data.get('ema_200')
 
-        if not all([close, ema_50, ema_200]):
+        if close is None or ema_50 is None or ema_200 is None:
             return False  # If data missing, don't skip
+            
+        import pandas as pd
+        if pd.isna(close) or pd.isna(ema_50) or pd.isna(ema_200):
+            return False
 
         return close < ema_50 and ema_50 < ema_200
 

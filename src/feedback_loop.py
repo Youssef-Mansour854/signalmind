@@ -25,8 +25,29 @@ class AIFeedbackLoop:
             
         self.db = db
         self.signals_col = self.db["signals"]
+        self.portfolio_col = self.db["user_portfolio"]
         self.feedback_col = self.db["aifeedbacks"]
         self.groq_api_key = os.environ.get("GROQ_API_KEY")
+
+    def get_closed_trades_count(self) -> int:
+        now = datetime.datetime.utcnow()
+        one_week_ago = now - datetime.timedelta(days=7)
+
+        # 1. Count trades closed in the past week from signals
+        signals_query = {
+            "status": {"$in": ["Hit TP", "Hit SL"]},
+            "closedAt": {"$gte": one_week_ago}
+        }
+        signals_count = self.signals_col.count_documents(signals_query)
+
+        # 2. Count trades closed in the past week from user_portfolio
+        portfolio_query = {
+            "status": {"$in": ["Hit TP", "Hit SL", "CLOSED"]},
+            "closedAt": {"$gte": one_week_ago}
+        }
+        portfolio_count = self.portfolio_col.count_documents(portfolio_query)
+
+        return signals_count + portfolio_count
 
     def run_weekly_assessment(self):
         print("Initiating Weekly AI Feedback Loop...")
@@ -39,31 +60,42 @@ class AIFeedbackLoop:
         now = datetime.datetime.utcnow()
         one_week_ago = now - datetime.timedelta(days=7)
 
-        # 1. Fetch trades closed in the past week
+        # 1. Fetch trades closed in the past week from signals
         query = {
             "status": {"$in": ["Hit TP", "Hit SL"]},
             "closedAt": {"$gte": one_week_ago}
         }
-        closed_trades = list(self.signals_col.find(query))
+        closed_signals = list(self.signals_col.find(query))
 
-        if not closed_trades:
+        # Fetch trades closed in the past week from user_portfolio
+        portfolio_query = {
+            "status": {"$in": ["Hit TP", "Hit SL", "CLOSED"]},
+            "closedAt": {"$gte": one_week_ago}
+        }
+        closed_portfolio = list(self.portfolio_col.find(portfolio_query))
+
+        if not closed_signals and not closed_portfolio:
             print("No closed trades found for self-optimization review this week.")
             return
 
         # 2. Segment and aggregate statistics
-        wins = [t for t in closed_trades if t["status"] == "Hit TP"]
-        losses = [t for t in closed_trades if t["status"] == "Hit SL"]
-        
-        win_count = len(wins)
-        loss_count = len(losses)
+        sig_wins = [t for t in closed_signals if t["status"] == "Hit TP"]
+        sig_losses = [t for t in closed_signals if t["status"] == "Hit SL"]
+
+        port_wins = [t for t in closed_portfolio if t["status"] == "Hit TP" or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) > 0)]
+        port_losses = [t for t in closed_portfolio if t["status"] == "Hit SL" or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) <= 0)]
+
+        win_count = len(sig_wins) + len(port_wins)
+        loss_count = len(sig_losses) + len(port_losses)
         total = win_count + loss_count
         win_rate = (win_count / total) * 100 if total > 0 else 0
 
         # Construct trade list text for the prompt
         trade_logs = []
-        for trade in closed_trades:
+        for trade in closed_signals:
             ind = trade.get("indicators", {})
             trade_logs.append({
+                "source": "automated_signal",
                 "symbol": trade["symbol"],
                 "status": trade["status"],
                 "pnl": trade.get("pnlPercentage", 0),
@@ -73,6 +105,32 @@ class AIFeedbackLoop:
                     "distance_to_support": ((trade["entryPrice"] - ind.get("support", 0)) / ind.get("support", 1)) if ind and ind.get("support") else None,
                     "volume_surge": (ind.get("volume", 0) / ind.get("volumeAvg", 1)) if ind and ind.get("volumeAvg") else None,
                     "bb_position": ((trade["entryPrice"] - ind.get("bbLow", 0)) / (ind.get("bbHigh", 1) - ind.get("bbLow", 0))) if ind and ind.get("bbLow") else None
+                }
+            })
+
+        for trade in closed_portfolio:
+            signal_id = trade.get("signalId")
+            ind = {}
+            if signal_id:
+                try:
+                    signal_doc = self.signals_col.find_one({"_id": signal_id})
+                    if signal_doc:
+                        ind = signal_doc.get("indicators", {})
+                except Exception as ex:
+                    print(f"Error fetching signal doc for portfolio item {trade.get('symbol')}: {ex}")
+
+            entry_price = trade.get("actualEntryPrice") or trade.get("entryPrice", 0)
+            trade_logs.append({
+                "source": "user_portfolio",
+                "symbol": trade["symbol"],
+                "status": trade["status"],
+                "pnl": trade.get("pnlPercentage", 0),
+                "indicators_at_entry": {
+                    "rsi": ind.get("rsi") if ind else None,
+                    "macd_diff": (ind.get("macdLine", 0) - ind.get("macdSignal", 0)) if ind and ind.get("macdLine") else None,
+                    "distance_to_support": ((entry_price - ind.get("support", 0)) / ind.get("support", 1)) if ind and ind.get("support") else None,
+                    "volume_surge": (ind.get("volume", 0) / ind.get("volumeAvg", 1)) if ind and ind.get("volumeAvg") else None,
+                    "bb_position": ((entry_price - ind.get("bbLow", 0)) / (ind.get("bbHigh", 1) - ind.get("bbLow", 0))) if ind and ind.get("bbLow") else None
                 }
             })
 

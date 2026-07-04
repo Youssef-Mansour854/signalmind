@@ -350,8 +350,12 @@ async def main_async():
         try:
             from feedback_loop import AIFeedbackLoop
             loop = AIFeedbackLoop()
-            await asyncio.sleep(10.0)  # Sleep 10s to clear rate limits
-            await asyncio.to_thread(loop.run_weekly_assessment)
+            count = loop.get_closed_trades_count()
+            if count >= 3:
+                await asyncio.sleep(10.0)  # Sleep 10s to clear rate limits
+                await asyncio.to_thread(loop.run_weekly_assessment)
+            else:
+                print(f"Skipping feedback loop: insufficient closed trades ({count} found, need 3+)")
         except Exception as e:
             print(f"Error running AI feedback loop: {e}")
     else:

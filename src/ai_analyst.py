@@ -53,9 +53,15 @@ class GroqAnalyst:
             vol_adj = weights.get("volumeWeightAdjustment", 0)
             trend_adj = weights.get("trendWeightAdjustment", 0)
 
-            adjustments += f"\nDynamic ML Feedback Weights applied for this analysis (Scale -10 to +10): "
-            adjustments += f"RSI Adjustment: {rsi_adj}, Volume Adjustment: {vol_adj}, Trend Adjustment: {trend_adj}. "
-            adjustments += "Adjust your strictness based exactly on the magnitude of these mathematical weights.\n"
+            # Calculate exact math rules
+            rsi_threshold = max(50.0, min(70.0, 60.0 + rsi_adj))
+            vol_multiplier = max(0.5, min(1.5, 1.0 + vol_adj * 0.05))
+
+            adjustments += f"\nDynamic ML Feedback mathematical rules applied for this analysis:\n"
+            adjustments += f"- Signal BUY only when the stock's 14-day RSI is strictly less than {rsi_threshold:.2f} (adjusted from the default 60).\n"
+            adjustments += f"- Signal BUY only when the trading Volume is at least {vol_multiplier:.2f}x of its 20-day Average Volume.\n"
+            if trend_adj != 0:
+                adjustments += f"- Trend Adjustment: {trend_adj:+.2f}. Adjust your trend filters strictness accordingly.\n"
 
             return adjustments
         except Exception as e:

@@ -504,63 +504,120 @@ export default function Dashboard() {
                   لا توجد صفقات منفذة حالياً في محفظتك لهذا السوق.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-neutral-900 rounded">
-                  <table className="w-full border-collapse text-right text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4">الرمز</th>
-                        <th className="p-4">سعر الدخول الفعلي</th>
-                        <th className="p-4">السعر الحالي</th>
-                        <th className="p-4">القيمة المستثمرة</th>
-                        <th className="p-4">الربح/الخسارة</th>
-                        <th className="p-4">الحالة</th>
-                        <th className="p-4 text-left">تاريخ التنفيذ</th>
-                        <th className="p-4 text-center">الإجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {activePortfolio.map(item => {
-                        const current = item.currentPrice || item.actualEntryPrice || 0;
-                        const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
-                        const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
-                        
-                        return (
-                          <tr key={item._id} className="hover:bg-neutral-900/20 transition">
-                            <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                            <td className="p-4 text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
-                            <td className="p-4 text-neutral-100">{formatPrice(current, item.market, item.symbol)}</td>
-                            <td className="p-4 text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
-                            <td className={`p-4 font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {formatPrice(pnl, item.market, item.symbol)}{' '}
-                              <span dir="ltr" className="inline-block">
-                                ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                          <th className="p-4">الرمز</th>
+                          <th className="p-4">سعر الدخول الفعلي</th>
+                          <th className="p-4">السعر الحالي</th>
+                          <th className="p-4">القيمة المستثمرة</th>
+                          <th className="p-4">الربح/الخسارة</th>
+                          <th className="p-4">الحالة</th>
+                          <th className="p-4 text-left">تاريخ التنفيذ</th>
+                          <th className="p-4 text-center">الإجراء</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                        {activePortfolio.map(item => {
+                          const current = item.currentPrice || item.actualEntryPrice || 0;
+                          const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
+                          const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
+                          
+                          return (
+                            <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                              <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                              <td className="p-4 text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
+                              <td className="p-4 text-neutral-100">{formatPrice(current, item.market, item.symbol)}</td>
+                              <td className="p-4 text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
+                              <td className={`p-4 font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatPrice(pnl, item.market, item.symbol)}{' '}
+                                <span dir="ltr" className="inline-block">
+                                  ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                </span>
+                              </td>
+                              <td className="p-4">
+                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
+                                  مفتوح / ACTIVE
+                                </span>
+                              </td>
+                              <td className="p-4 text-left text-neutral-500">{formatDate(item.executedAt)}</td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => {
+                                    setSelectedPortfolioItem(item);
+                                    setExitPrice(current || item.actualEntryPrice);
+                                    setCloseReason('Manual Close');
+                                    setIsCloseModalOpen(true);
+                                  }}
+                                  className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer"
+                                >
+                                  إغلاق الصفقة
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="md:hidden space-y-4">
+                    {activePortfolio.map(item => {
+                      const current = item.currentPrice || item.actualEntryPrice || 0;
+                      const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
+                      const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
+                      return (
+                        <div key={item._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-450 border border-neutral-800 rounded uppercase">
+                              مفتوح
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">الدخول الفعلي:</span>
+                              <span className="text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
+                              <span className="text-neutral-100">{formatPrice(current, item.market, item.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">القيمة:</span>
+                              <span className="text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">الربح/الخسارة:</span>
+                              <span className={`font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {formatPrice(pnl, item.market, item.symbol)}{' '}
+                                <span dir="ltr" className="inline-block">({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
                               </span>
-                            </td>
-                            <td className="p-4">
-                              <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
-                                مفتوح / ACTIVE
-                              </span>
-                            </td>
-                            <td className="p-4 text-left text-neutral-500">{formatDate(item.executedAt)}</td>
-                            <td className="p-4 text-center">
-                              <button
-                                onClick={() => {
-                                  setSelectedPortfolioItem(item);
-                                  setExitPrice(current || item.actualEntryPrice);
-                                  setCloseReason('Manual Close');
-                                  setIsCloseModalOpen(true);
-                                }}
-                                className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer"
-                              >
-                                إغلاق الصفقة
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-neutral-900 text-[10px] text-neutral-500">
+                            <span>تاريخ التنفيذ: {formatDate(item.executedAt)}</span>
+                            <button
+                              onClick={() => {
+                                setSelectedPortfolioItem(item);
+                                setExitPrice(current || item.actualEntryPrice);
+                                setCloseReason('Manual Close');
+                                setIsCloseModalOpen(true);
+                              }}
+                              className="px-3 py-1 border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer text-[10px]"
+                            >
+                              إغلاق الصفقة
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </section>
 
@@ -578,69 +635,134 @@ export default function Dashboard() {
                   لا توجد صفقات نشطة حالياً في هذا السوق.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-neutral-900 rounded">
-                  <table className="w-full border-collapse text-right text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4">السهم</th>
-                        <th className="p-4">السعر الحالي</th>
-                        <th className="p-4">سعر الدخول</th>
-                        <th className="p-4">هدف الربح</th>
-                        <th className="p-4">وقف الخسارة</th>
-                        <th className="p-4" style={{ width: '45%' }}>التحليل الفني</th>
-                        <th className="p-4 text-center">الإجراء</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {sortedActiveTrades.map(trade => (
-                        <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
-                          <td className="p-4 font-bold text-white tracking-wide">
-                            <div>{trade.symbol}</div>
-                            <div className="text-[10px] text-neutral-500 mt-1 font-mono">
-                              عائد:{' '}
-                              <span dir="ltr" className="inline-block">
-                                +{trade.expectedProfitPct.toFixed(1)}%
-                              </span>{' '}
-                              | RRR: {trade.rrr.toFixed(2)}
-                            </div>
-                            <div className="mt-1">
-                              {trade.status === 'Pending' && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
-                                  معلق / Pending
-                                </span>
-                              )}
-                              {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
-                                  نشط / Active
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 text-neutral-100">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
-                          <td className="p-4 text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                          <td className="p-4 text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
-                          <td className="p-4 text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
-                          <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
-                            {trade.explanationArabic}
-                          </td>
-                          <td className="p-4 text-center">
-                            <button
-                              onClick={() => {
-                                setSelectedTrade(trade);
-                                setActualEntryPrice(trade.entryPrice);
-                                setPositionSize('');
-                                setIsModalOpen(true);
-                              }}
-                              className="px-3 py-1 text-[10px] border border-neutral-800 hover:border-neutral-600 transition bg-neutral-900 text-neutral-200 font-bold rounded cursor-pointer"
-                            >
-                              تنفيذ الصفقة
-                            </button>
-                          </td>
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                          <th className="p-4">السهم</th>
+                          <th className="p-4">السعر الحالي</th>
+                          <th className="p-4">سعر الدخول</th>
+                          <th className="p-4">هدف الربح</th>
+                          <th className="p-4">وقف الخسارة</th>
+                          <th className="p-4" style={{ width: '45%' }}>التحليل الفني</th>
+                          <th className="p-4 text-center">الإجراء</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                        {sortedActiveTrades.map(trade => (
+                          <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                            <td className="p-4 font-bold text-white tracking-wide">
+                              <div>{trade.symbol}</div>
+                              <div className="text-[10px] text-neutral-500 mt-1 font-mono">
+                                عائد:{' '}
+                                <span dir="ltr" className="inline-block">
+                                  +{trade.expectedProfitPct.toFixed(1)}%
+                                </span>{' '}
+                                | RRR: {trade.rrr.toFixed(2)}
+                              </div>
+                              <div className="mt-1">
+                                {trade.status === 'Pending' && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
+                                    معلق / Pending
+                                  </span>
+                                )}
+                                {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
+                                    نشط / Active
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 text-neutral-100">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
+                            <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
+                              {trade.explanationArabic}
+                            </td>
+                            <td className="p-4 text-center">
+                              <button
+                                onClick={() => {
+                                  setSelectedTrade(trade);
+                                  setActualEntryPrice(trade.entryPrice);
+                                  setPositionSize('');
+                                  setIsModalOpen(true);
+                                }}
+                                className="px-3 py-1 text-[10px] border border-neutral-800 hover:border-neutral-600 transition bg-neutral-900 text-neutral-200 font-bold rounded cursor-pointer"
+                              >
+                                تنفيذ الصفقة
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="md:hidden space-y-4">
+                    {sortedActiveTrades.map(trade => (
+                      <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
+                            <span className="text-[9px] text-neutral-500 mr-2 font-mono" dir="ltr">
+                              +{trade.expectedProfitPct.toFixed(1)}% | R: {trade.rrr.toFixed(1)}
+                            </span>
+                          </div>
+                          <div>
+                            {trade.status === 'Pending' && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded">
+                                معلق
+                              </span>
+                            )}
+                            {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded">
+                                نشط
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
+                            <span className="text-neutral-100">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
+                            <span className="text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[10px]">هدف الربح:</span>
+                            <span className="text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
+                          </div>
+                          <div>
+                            <span className="text-neutral-500 block text-[10px]">وقف الخسارة:</span>
+                            <span className="text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
+                          </div>
+                        </div>
+                        <div className="text-neutral-300 text-xs bg-neutral-900/40 p-2.5 rounded border border-neutral-900 leading-relaxed font-light">
+                          {trade.explanationArabic}
+                        </div>
+                        <div className="pt-2 border-t border-neutral-900">
+                          <button
+                            onClick={() => {
+                              setSelectedTrade(trade);
+                              setActualEntryPrice(trade.entryPrice);
+                              setPositionSize('');
+                              setIsModalOpen(true);
+                            }}
+                            className="w-full py-2 border border-neutral-850 hover:border-neutral-600 transition bg-neutral-900 text-neutral-200 font-bold rounded cursor-pointer text-[10px] text-center"
+                          >
+                            تنفيذ الصفقة
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </section>
 
@@ -658,37 +780,70 @@ export default function Dashboard() {
                   لا توجد صفقات رابحة مغلقة في هذا السوق بعد.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-neutral-900 rounded">
-                  <table className="w-full border-collapse text-right text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4">الرمز</th>
-                        <th className="p-4">سعر الدخول</th>
-                        <th className="p-4">سعر الخروج</th>
-                        <th className="p-4">نسبة العائد (%)</th>
-                        <th className="p-4 text-left">تاريخ الإغلاق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {realizedWins.map(trade => {
-                        const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
-                        return (
-                          <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
-                            <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                            <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4">
-                              <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
-                                +{trade.pnlPercentage || 0}%
-                              </span>
-                            </td>
-                            <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                          <th className="p-4">الرمز</th>
+                          <th className="p-4">سعر الدخول</th>
+                          <th className="p-4">سعر الخروج</th>
+                          <th className="p-4">نسبة العائد (%)</th>
+                          <th className="p-4 text-left">تاريخ الإغلاق</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                        {realizedWins.map(trade => {
+                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                          return (
+                            <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                              <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
+                              <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4">
+                                <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
+                                  +{trade.pnlPercentage || 0}%
+                                </span>
+                              </td>
+                              <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="md:hidden space-y-4">
+                    {realizedWins.map(trade => {
+                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                      return (
+                        <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
+                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
+                              +{trade.pnlPercentage || 0}%
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
+                              <span className="text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
+                              <span className="text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                            تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </section>
 
@@ -706,37 +861,70 @@ export default function Dashboard() {
                   لا توجد صفقات خاسرة مغلقة في هذا السوق بعد.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-neutral-900 rounded">
-                  <table className="w-full border-collapse text-right text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4">الرمز</th>
-                        <th className="p-4">سعر الدخول</th>
-                        <th className="p-4">سعر الخروج</th>
-                        <th className="p-4">نسبة العائد (%)</th>
-                        <th className="p-4 text-left">تاريخ الإغلاق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {triggeredLosses.map(trade => {
-                        const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
-                        return (
-                          <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
-                            <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                            <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4">
-                              <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
-                                {trade.pnlPercentage || 0}%
-                              </span>
-                            </td>
-                            <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                          <th className="p-4">الرمز</th>
+                          <th className="p-4">سعر الدخول</th>
+                          <th className="p-4">سعر الخروج</th>
+                          <th className="p-4">نسبة العائد (%)</th>
+                          <th className="p-4 text-left">تاريخ الإغلاق</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                        {triggeredLosses.map(trade => {
+                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                          return (
+                            <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                              <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
+                              <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4">
+                                <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
+                                  {trade.pnlPercentage || 0}%
+                                </span>
+                              </td>
+                              <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="md:hidden space-y-4">
+                    {triggeredLosses.map(trade => {
+                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                      return (
+                        <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
+                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
+                              {trade.pnlPercentage || 0}%
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
+                              <span className="text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
+                              <span className="text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                            تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </section>
 
@@ -754,56 +942,108 @@ export default function Dashboard() {
                   لا توجد صفقات مغلقة في هذا السوق بعد.
                 </div>
               ) : (
-                <div className="overflow-x-auto border border-neutral-900 rounded">
-                  <table className="w-full border-collapse text-right text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                        <th className="p-4 text-right">السهم</th>
-                        <th className="p-4 text-right">المحفظة</th>
-                        <th className="p-4 text-right">مدة الاحتفاظ</th>
-                        <th className="p-4 text-right">سعر الدخول ➔ الإغلاق</th>
-                        <th className="p-4 text-right">الربح النقدي</th>
-                        <th className="p-4 text-right">العائد %</th>
-                        <th className="p-4 text-right">أقصى صعود</th>
-                        <th className="p-4 text-left">تاريخ الإغلاق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
-                      {filteredHistory.map(item => {
-                        const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
-                        const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
-                        return (
-                          <tr key={item._id} className="hover:bg-neutral-900/20 transition">
-                            <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                            <td className="p-4 text-neutral-300">
-                              {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
-                            </td>
-                            <td className="p-4 text-neutral-400 font-mono">{item.holdingDuration}</td>
-                            <td className="p-4 text-neutral-300 font-mono" dir="ltr">
-                              {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
-                            </td>
-                            <td className="p-4 font-bold font-mono">
-                              <span dir="ltr" className={`inline-block ${cashPnlColor}`}>
+                <>
+                  {/* Desktop View */}
+                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                    <table className="w-full border-collapse text-right text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                          <th className="p-4 text-right">السهم</th>
+                          <th className="p-4 text-right">المحفظة</th>
+                          <th className="p-4 text-right">مدة الاحتفاظ</th>
+                          <th className="p-4 text-right">سعر الدخول ➔ الإغلاق</th>
+                          <th className="p-4 text-right">الربح النقدي</th>
+                          <th className="p-4 text-right">العائد %</th>
+                          <th className="p-4 text-right">أقصى صعود</th>
+                          <th className="p-4 text-left">تاريخ الإغلاق</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                        {filteredHistory.map(item => {
+                          const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
+                          const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
+                          return (
+                            <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                              <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                              <td className="p-4 text-neutral-300">
+                                {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
+                              </td>
+                              <td className="p-4 text-neutral-400 font-mono">{item.holdingDuration}</td>
+                              <td className="p-4 text-neutral-300 font-mono" dir="ltr">
+                                {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
+                              </td>
+                              <td className="p-4 font-bold font-mono">
+                                <span dir="ltr" className={`inline-block ${cashPnlColor}`}>
+                                  {item.cashPnL > 0 ? '+' : ''}{formatPrice(item.cashPnL, item.market, item.symbol)}
+                                </span>
+                              </td>
+                              <td className="p-4 font-bold">
+                                <span dir="ltr" className={`inline-block ${pnlColor}`}>
+                                  {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
+                                </span>
+                              </td>
+                              <td className="p-4 font-bold font-mono text-emerald-400/90">
+                                <span dir="ltr" className="inline-block">
+                                  +{item.maxPeakPercentage.toFixed(2)}%
+                                </span>
+                              </td>
+                              <td className="p-4 text-left text-neutral-500">{formatDate(item.closedAt)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View */}
+                  <div className="md:hidden space-y-4">
+                    {filteredHistory.map(item => {
+                      const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
+                      const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
+                      return (
+                        <div key={item._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
+                            <span className="text-[10px] text-neutral-450 font-mono">الاحتفاظ: {item.holdingDuration}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">المحفظة:</span>
+                              <span className="text-neutral-300">{item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">السعر:</span>
+                              <span className="text-neutral-300 font-mono text-[10px]" dir="ltr">
+                                {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">الربح النقدي:</span>
+                              <span dir="ltr" className={`font-bold font-mono ${cashPnlColor}`}>
                                 {item.cashPnL > 0 ? '+' : ''}{formatPrice(item.cashPnL, item.market, item.symbol)}
                               </span>
-                            </td>
-                            <td className="p-4 font-bold">
-                              <span dir="ltr" className={`inline-block ${pnlColor}`}>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">العائد %:</span>
+                              <span dir="ltr" className={`font-bold ${pnlColor}`}>
                                 {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
                               </span>
-                            </td>
-                            <td className="p-4 font-bold font-mono text-emerald-400/90">
-                              <span dir="ltr" className="inline-block">
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">أقصى صعود:</span>
+                              <span dir="ltr" className="font-bold font-mono text-emerald-400/90">
                                 +{item.maxPeakPercentage.toFixed(2)}%
                               </span>
-                            </td>
-                            <td className="p-4 text-left text-neutral-500">{formatDate(item.closedAt)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                            تاريخ الإغلاق: {formatDate(item.closedAt)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </section>
           </>
