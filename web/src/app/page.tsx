@@ -293,26 +293,28 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans antialiased" dir="rtl">
+    <div className="min-h-screen bg-transparent text-neutral-100 font-sans antialiased" dir="rtl">
       {/* Header */}
-      <header className="border-b border-neutral-900 py-6 bg-neutral-950">
+      <header className="border-b border-neutral-900/50 py-5 sticky top-0 z-50 backdrop-blur-md bg-neutral-950/70">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white uppercase font-mono">
-              محطة سيجنال مايند / SignalMind
+            <h1 className="text-xl font-black tracking-tight uppercase">
+              <span className="bg-gradient-to-r from-indigo-300 via-indigo-200 to-emerald-300 bg-clip-text text-transparent">
+                محطة سيجنال مايند / SignalMind
+              </span>
             </h1>
-            <p className="text-xs text-neutral-500 mt-1 font-mono">
+            <p className="text-[10px] text-indigo-400/70 mt-1 font-mono uppercase tracking-wider">
               التداول الخوارزمي الذكي والتحليل الإحصائي وإدارة المراكز
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button 
               onClick={fetchData}
-              className="px-4 py-1.5 text-xs border border-neutral-800 hover:border-neutral-600 transition bg-neutral-900/40 text-neutral-300 font-mono rounded"
+              className="px-4 py-1.5 text-xs border border-neutral-800/80 hover:border-indigo-500/50 transition-all duration-300 bg-neutral-900/60 hover:bg-indigo-950/20 text-neutral-300 hover:text-white font-bold rounded cursor-pointer"
             >
               تحديث البيانات
             </button>
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
             <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">
               متصل بالشبكة
             </span>
@@ -326,35 +328,35 @@ export default function Dashboard() {
         {/* بطاقات الأداء (Premium Stat Cards) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-sans">
           {/* إجمالي قيمة المحفظة النشطة */}
-          <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
-            <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
+          <div className="glass-card p-5 rounded-lg space-y-4 border-t-2 border-t-indigo-500/80 hover-scale">
+            <div className="flex items-center justify-between text-neutral-400 text-[10px] uppercase font-bold tracking-wider font-mono">
               <span>قيمة المحفظة النشطة / Portfolio Value</span>
-              <span>💰</span>
+              <span className="text-indigo-400 text-sm">💰</span>
             </div>
             <div>
-              <span className="text-[10px] text-neutral-500 block">القيمة الحالية (Current Value)</span>
-              <span className="text-xl font-bold text-white font-mono">
+              <span className="text-[10px] text-neutral-500 block mb-1">القيمة الحالية (Current Value)</span>
+              <span className="text-2xl font-black text-white font-mono tracking-wide">
                 {formatPrice(totalPortfolioValue, marketFilter, '')}
               </span>
             </div>
           </div>
 
           {/* نسبة النجاح */}
-          <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
-            <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
+          <div className="glass-card p-5 rounded-lg space-y-4 border-t-2 border-t-emerald-500/80 hover-scale">
+            <div className="flex items-center justify-between text-neutral-400 text-[10px] uppercase font-bold tracking-wider font-mono">
               <span>نسبة النجاح / Win Rate</span>
-              <span>🎯</span>
+              <span className="text-emerald-400 text-sm">🎯</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-[10px] text-neutral-500 block">الفعلي (Actual)</span>
-                <span className="text-xl font-bold text-white font-mono">
+                <span className="text-[10px] text-neutral-500 block mb-1">الفعلي (Actual)</span>
+                <span className="text-2xl font-black text-emerald-400 font-mono">
                   <span dir="ltr" className="inline-block">{analytics?.actual.winRate || 0}%</span>
                 </span>
               </div>
               <div className="border-r border-neutral-900 pr-4">
-                <span className="text-[10px] text-neutral-500 block">الافتراضي (AI)</span>
-                <span className="text-xl font-bold text-neutral-400 font-mono">
+                <span className="text-[10px] text-neutral-500 block mb-1">الافتراضي (AI)</span>
+                <span className="text-2xl font-black text-neutral-400 font-mono">
                   <span dir="ltr" className="inline-block">{analytics?.shadow.winRate || 0}%</span>
                 </span>
               </div>
@@ -362,21 +364,21 @@ export default function Dashboard() {
           </div>
 
           {/* إجمالي الصفقات */}
-          <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
-            <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
+          <div className="glass-card p-5 rounded-lg space-y-4 border-t-2 border-t-purple-500/80 hover-scale">
+            <div className="flex items-center justify-between text-neutral-400 text-[10px] uppercase font-bold tracking-wider font-mono">
               <span>إجمالي الصفقات المغلقة / Closed</span>
-              <span>📊</span>
+              <span className="text-purple-400 text-sm">📊</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-[10px] text-neutral-500 block">الفعلي (Actual)</span>
-                <span className="text-xl font-bold text-white font-mono">
+                <span className="text-[10px] text-neutral-500 block mb-1">الفعلي (Actual)</span>
+                <span className="text-2xl font-black text-white font-mono">
                   {analytics?.actual.totalClosed || 0}
                 </span>
               </div>
               <div className="border-r border-neutral-900 pr-4">
-                <span className="text-[10px] text-neutral-500 block">الافتراضي (AI)</span>
-                <span className="text-xl font-bold text-neutral-400 font-mono">
+                <span className="text-[10px] text-neutral-500 block mb-1">الافتراضي (AI)</span>
+                <span className="text-2xl font-black text-neutral-400 font-mono">
                   {analytics?.shadow.totalClosed || 0}
                 </span>
               </div>
@@ -384,23 +386,23 @@ export default function Dashboard() {
           </div>
 
           {/* متوسط العائد */}
-          <div className="border border-neutral-900 bg-neutral-950/40 p-5 rounded space-y-4">
-            <div className="flex items-center justify-between text-neutral-500 text-[10px] uppercase font-bold tracking-wider font-mono">
+          <div className="glass-card p-5 rounded-lg space-y-4 border-t-2 border-t-pink-500/80 hover-scale">
+            <div className="flex items-center justify-between text-neutral-400 text-[10px] uppercase font-bold tracking-wider font-mono">
               <span>متوسط العائد / Avg Return</span>
-              <span>📈</span>
+              <span className="text-pink-400 text-sm">📈</span>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-[10px] text-neutral-500 block">الفعلي (Actual)</span>
-                <span className={`text-xl font-bold font-mono ${
+                <span className="text-[10px] text-neutral-500 block mb-1">الفعلي (Actual)</span>
+                <span className={`text-2xl font-black font-mono ${
                   (analytics?.actual.avgPnl || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
                   <span dir="ltr" className="inline-block">{(analytics?.actual.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.actual.avgPnl || 0}%</span>
                 </span>
               </div>
               <div className="border-r border-neutral-900 pr-4">
-                <span className="text-[10px] text-neutral-500 block">الافتراضي (AI)</span>
-                <span className={`text-xl font-bold font-mono ${
+                <span className="text-[10px] text-neutral-500 block mb-1">الافتراضي (AI)</span>
+                <span className={`text-2xl font-black font-mono ${
                   (analytics?.shadow.avgPnl || 0) >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'
                 }`}>
                   <span dir="ltr" className="inline-block">{(analytics?.shadow.avgPnl || 0) >= 0 ? '+' : ''}{analytics?.shadow.avgPnl || 0}%</span>
@@ -411,27 +413,27 @@ export default function Dashboard() {
         </div>
         
         {/* Market & Timeframe Selector Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-center border-b border-neutral-900 pb-4 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-center border-b border-neutral-900/50 pb-4 gap-4">
           {/* Market Selector & Sort Dropdown */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
             {/* Market Tabs */}
-            <div className="flex gap-2 p-1 rounded bg-neutral-900/50 border border-neutral-900 w-full sm:w-auto justify-center">
+            <div className="flex gap-2 p-1 rounded-lg bg-neutral-950/60 border border-neutral-900/60 w-full sm:w-auto justify-center">
               <button
                 onClick={() => setMarketFilter('EGX')}
-                className={`px-6 py-1.5 text-xs font-bold transition rounded cursor-pointer ${
+                className={`px-6 py-1.5 text-xs font-bold transition-all duration-300 rounded-md cursor-pointer ${
                   marketFilter === 'EGX'
-                    ? 'bg-neutral-800 text-white shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-200'
+                    ? 'bg-indigo-600/90 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/30'
                 }`}
               >
                 السوق المصري (EGX)
               </button>
               <button
                 onClick={() => setMarketFilter('US')}
-                className={`px-6 py-1.5 text-xs font-bold transition rounded cursor-pointer ${
+                className={`px-6 py-1.5 text-xs font-bold transition-all duration-300 rounded-md cursor-pointer ${
                   marketFilter === 'US'
-                    ? 'bg-neutral-800 text-white shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-200'
+                    ? 'bg-indigo-600/90 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/30'
                 }`}
               >
                 السوق الأمريكي (US)
@@ -442,7 +444,7 @@ export default function Dashboard() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-neutral-900 border border-neutral-850 text-neutral-300 py-1.5 px-4 text-xs rounded focus:outline-none focus:border-neutral-600 font-bold font-sans cursor-pointer w-full sm:w-auto"
+              className="bg-neutral-950 border border-neutral-900 text-neutral-300 py-1.5 px-4 text-xs rounded-md focus:outline-none focus:border-indigo-500/50 font-bold font-sans cursor-pointer w-full sm:w-auto transition-all duration-300"
             >
               <option value="latest">الأحدث (تاريخ التوصية)</option>
               <option value="rrr">الأفضل (معدل العائد/المخاطرة RRR)</option>
@@ -452,7 +454,7 @@ export default function Dashboard() {
           </div>
 
           {/* Timeframe Selector Toggle Group */}
-          <div className="flex flex-wrap gap-2 p-1 rounded bg-neutral-900/50 border border-neutral-900 w-full md:w-auto justify-center font-mono">
+          <div className="flex flex-wrap gap-2 p-1 rounded-lg bg-neutral-950/60 border border-neutral-900/60 w-full md:w-auto justify-center font-mono">
             {[
               { id: 'weekly', label: 'أسبوعي' },
               { id: 'monthly', label: 'شهري' },
@@ -464,9 +466,9 @@ export default function Dashboard() {
               <button
                 key={tf.id}
                 onClick={() => setTimeframe(tf.id)}
-                className={`px-4 py-1.5 text-[10px] font-bold transition rounded cursor-pointer ${
+                className={`px-4 py-1.5 text-[10px] font-bold transition-all duration-300 rounded-md cursor-pointer ${
                   timeframe === tf.id
-                    ? 'bg-neutral-800 text-white'
+                    ? 'bg-neutral-900 text-white shadow-sm border border-neutral-800'
                     : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
@@ -492,24 +494,24 @@ export default function Dashboard() {
           <>
             {/* User Portfolio Section */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
                   <span>[ محفظتي الفعلية ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({activePortfolio.length})</span>
                 </h2>
               </div>
 
               {activePortfolio.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
                   لا توجد صفقات منفذة حالياً في محفظتك لهذا السوق.
                 </div>
               ) : (
                 <>
                   {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                           <th className="p-4">الرمز</th>
                           <th className="p-4">سعر الدخول الفعلي</th>
                           <th className="p-4">السعر الحالي</th>
@@ -520,30 +522,30 @@ export default function Dashboard() {
                           <th className="p-4 text-center">الإجراء</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {activePortfolio.map(item => {
                           const current = item.currentPrice || item.actualEntryPrice || 0;
                           const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
                           const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
                           
                           return (
-                            <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                            <tr key={item._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                              <td className="p-4 text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
-                              <td className="p-4 text-neutral-100">{formatPrice(current, item.market, item.symbol)}</td>
-                              <td className="p-4 text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
-                              <td className={`p-4 font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
+                              <td className="p-4 text-neutral-100 font-mono">{formatPrice(current, item.market, item.symbol)}</td>
+                              <td className="p-4 text-neutral-200 font-mono">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
+                              <td className={`p-4 font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {formatPrice(pnl, item.market, item.symbol)}{' '}
                                 <span dir="ltr" className="inline-block">
                                   ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
                                 </span>
                               </td>
                               <td className="p-4">
-                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase">
-                                  مفتوح / ACTIVE
+                                <span className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase font-mono">
+                                  ACTIVE
                                 </span>
                               </td>
-                              <td className="p-4 text-left text-neutral-500">{formatDate(item.executedAt)}</td>
+                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(item.executedAt)}</td>
                               <td className="p-4 text-center">
                                 <button
                                   onClick={() => {
@@ -552,7 +554,7 @@ export default function Dashboard() {
                                     setCloseReason('Manual Close');
                                     setIsCloseModalOpen(true);
                                   }}
-                                  className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer"
+                                  className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition-all duration-300 bg-rose-950/20 text-rose-300 hover:text-white font-bold rounded cursor-pointer"
                                 >
                                   إغلاق الصفقة
                                 </button>
@@ -571,35 +573,35 @@ export default function Dashboard() {
                       const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
                       const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
                       return (
-                        <div key={item._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                        <div key={item._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${pnl >= 0 ? 'glow-emerald' : 'glow-rose'}`}>
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
-                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-450 border border-neutral-800 rounded uppercase">
-                              مفتوح
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-450 border border-neutral-850 rounded uppercase font-mono">
+                              ACTIVE
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-neutral-500 block text-[10px]">الدخول الفعلي:</span>
-                              <span className="text-neutral-300">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</span>
+                              <span className="text-neutral-300 font-mono">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
-                              <span className="text-neutral-100">{formatPrice(current, item.market, item.symbol)}</span>
+                              <span className="text-neutral-100 font-mono">{formatPrice(current, item.market, item.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">القيمة:</span>
-                              <span className="text-neutral-200">{formatPrice(item.positionSize, item.market, item.symbol)}</span>
+                              <span className="text-neutral-200 font-mono">{formatPrice(item.positionSize, item.market, item.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">الربح/الخسارة:</span>
-                              <span className={`font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              <span className={`font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                 {formatPrice(pnl, item.market, item.symbol)}{' '}
                                 <span dir="ltr" className="inline-block">({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)</span>
                               </span>
                             </div>
                           </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-neutral-900 text-[10px] text-neutral-500">
+                          <div className="flex justify-between items-center pt-2 border-t border-neutral-900/50 text-[10px] text-neutral-500">
                             <span>تاريخ التنفيذ: {formatDate(item.executedAt)}</span>
                             <button
                               onClick={() => {
@@ -608,7 +610,7 @@ export default function Dashboard() {
                                 setCloseReason('Manual Close');
                                 setIsCloseModalOpen(true);
                               }}
-                              className="px-3 py-1 border border-rose-900/60 hover:border-rose-600 transition bg-rose-950/20 text-rose-300 font-bold rounded cursor-pointer text-[10px]"
+                              className="px-3 py-1 border border-rose-900/60 hover:border-rose-600 transition-all duration-300 bg-rose-950/20 text-rose-300 hover:text-white font-bold rounded cursor-pointer text-[10px]"
                             >
                               إغلاق الصفقة
                             </button>
@@ -623,24 +625,24 @@ export default function Dashboard() {
 
             {/* 1. Active Positions Table */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
                   <span>[ الصفقات النشطة ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({sortedActiveTrades.length})</span>
                 </h2>
               </div>
 
               {sortedActiveTrades.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
                   لا توجد صفقات نشطة حالياً في هذا السوق.
                 </div>
               ) : (
                 <>
                   {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                           <th className="p-4">السهم</th>
                           <th className="p-4">السعر الحالي</th>
                           <th className="p-4">سعر الدخول</th>
@@ -650,9 +652,9 @@ export default function Dashboard() {
                           <th className="p-4 text-center">الإجراء</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {sortedActiveTrades.map(trade => (
-                          <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                          <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                             <td className="p-4 font-bold text-white tracking-wide">
                               <div>{trade.symbol}</div>
                               <div className="text-[10px] text-neutral-500 mt-1 font-mono">
@@ -665,20 +667,20 @@ export default function Dashboard() {
                               <div className="mt-1">
                                 {trade.status === 'Pending' && (
                                   <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
-                                    معلق / Pending
+                                    Pending
                                   </span>
                                 )}
                                 {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
                                   <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
-                                    نشط / Active
+                                    Active
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="p-4 text-neutral-100">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
+                            <td className="p-4 text-rose-400/90 font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
                             <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
                               {trade.explanationArabic}
                             </td>
@@ -690,7 +692,7 @@ export default function Dashboard() {
                                   setPositionSize('');
                                   setIsModalOpen(true);
                                 }}
-                                className="px-3 py-1 text-[10px] border border-neutral-800 hover:border-neutral-600 transition bg-neutral-900 text-neutral-200 font-bold rounded cursor-pointer"
+                                className="px-3 py-1 text-[10px] border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer"
                               >
                                 تنفيذ الصفقة
                               </button>
@@ -704,7 +706,7 @@ export default function Dashboard() {
                   {/* Mobile View */}
                   <div className="md:hidden space-y-4">
                     {sortedActiveTrades.map(trade => (
-                      <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                      <div key={trade._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${(trade.status === 'Active' || trade.status === 'ACTIVE') ? 'glow-emerald' : 'glow-amber'}`}>
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
@@ -714,12 +716,12 @@ export default function Dashboard() {
                           </div>
                           <div>
                             {trade.status === 'Pending' && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded">
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-mono font-bold">
                                 معلق
                               </span>
                             )}
                             {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded">
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-mono font-bold">
                                 نشط
                               </span>
                             )}
@@ -728,25 +730,25 @@ export default function Dashboard() {
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
                             <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
-                            <span className="text-neutral-100">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
+                            <span className="text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
                           </div>
                           <div>
                             <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                            <span className="text-neutral-300">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                            <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
                           </div>
                           <div>
                             <span className="text-neutral-500 block text-[10px]">هدف الربح:</span>
-                            <span className="text-emerald-400/90">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
+                            <span className="text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
                           </div>
                           <div>
                             <span className="text-neutral-500 block text-[10px]">وقف الخسارة:</span>
-                            <span className="text-rose-400/90">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
+                            <span className="text-rose-400/90 font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
                           </div>
                         </div>
-                        <div className="text-neutral-300 text-xs bg-neutral-900/40 p-2.5 rounded border border-neutral-900 leading-relaxed font-light">
+                        <div className="text-neutral-300 text-xs bg-neutral-950/40 p-2.5 rounded border border-neutral-900/60 leading-relaxed font-light">
                           {trade.explanationArabic}
                         </div>
-                        <div className="pt-2 border-t border-neutral-900">
+                        <div className="pt-2 border-t border-neutral-900/50">
                           <button
                             onClick={() => {
                               setSelectedTrade(trade);
@@ -754,7 +756,7 @@ export default function Dashboard() {
                               setPositionSize('');
                               setIsModalOpen(true);
                             }}
-                            className="w-full py-2 border border-neutral-850 hover:border-neutral-600 transition bg-neutral-900 text-neutral-200 font-bold rounded cursor-pointer text-[10px] text-center"
+                            className="w-full py-2 border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer text-[10px] text-center"
                           >
                             تنفيذ الصفقة
                           </button>
@@ -768,24 +770,24 @@ export default function Dashboard() {
 
             {/* 2. Realized Profits Table */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
                   <span>[ الأرباح المحققة ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({realizedWins.length})</span>
                 </h2>
               </div>
 
               {realizedWins.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
                   لا توجد صفقات رابحة مغلقة في هذا السوق بعد.
                 </div>
               ) : (
                 <>
                   {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                           <th className="p-4">الرمز</th>
                           <th className="p-4">سعر الدخول</th>
                           <th className="p-4">سعر الخروج</th>
@@ -793,20 +795,20 @@ export default function Dashboard() {
                           <th className="p-4 text-left">تاريخ الإغلاق</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {realizedWins.map(trade => {
                           const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
                           return (
-                            <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                            <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                              <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4">
+                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-emerald-450 font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 font-mono">
                                 <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
                                   +{trade.pnlPercentage || 0}%
                                 </span>
                               </td>
-                              <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
+                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(trade.closedAt || trade.closed_at)}</td>
                             </tr>
                           );
                         })}
@@ -819,24 +821,24 @@ export default function Dashboard() {
                     {realizedWins.map(trade => {
                       const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
                       return (
-                        <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                        <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-emerald">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
+                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded font-mono">
                               +{trade.pnlPercentage || 0}%
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                              <span className="text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                              <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
-                              <span className="text-emerald-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
+                              <span className="text-emerald-400 font-bold font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
                             </div>
                           </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
                             تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
                           </div>
                         </div>
@@ -849,24 +851,24 @@ export default function Dashboard() {
 
             {/* 3. Triggered Stops Table */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
                   <span>[ الصفقات المغلقة على خسارة ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({triggeredLosses.length})</span>
                 </h2>
               </div>
 
               {triggeredLosses.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
                   لا توجد صفقات خاسرة مغلقة في هذا السوق بعد.
                 </div>
               ) : (
                 <>
                   {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                           <th className="p-4">الرمز</th>
                           <th className="p-4">سعر الدخول</th>
                           <th className="p-4">سعر الخروج</th>
@@ -874,20 +876,20 @@ export default function Dashboard() {
                           <th className="p-4 text-left">تاريخ الإغلاق</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {triggeredLosses.map(trade => {
                           const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
                           return (
-                            <tr key={trade._id} className="hover:bg-neutral-900/20 transition">
+                            <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                              <td className="p-4 text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4">
+                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-rose-400 font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 font-mono">
                                 <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
                                   {trade.pnlPercentage || 0}%
                                 </span>
                               </td>
-                              <td className="p-4 text-left text-neutral-500">{formatDate(trade.closedAt || trade.closed_at)}</td>
+                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(trade.closedAt || trade.closed_at)}</td>
                             </tr>
                           );
                         })}
@@ -900,24 +902,24 @@ export default function Dashboard() {
                     {triggeredLosses.map(trade => {
                       const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
                       return (
-                        <div key={trade._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                        <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-rose">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
+                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded font-mono">
                               {trade.pnlPercentage || 0}%
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                              <span className="text-neutral-400">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                              <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
-                              <span className="text-rose-400 font-bold">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
+                              <span className="text-rose-400 font-bold font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
                             </div>
                           </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
                             تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
                           </div>
                         </div>
@@ -930,24 +932,24 @@ export default function Dashboard() {
 
             {/* 4. Closed Trades History Table */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-neutral-300 flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
                   <span>[ سجل الصفقات المغلقة ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({filteredHistory.length})</span>
                 </h2>
               </div>
 
               {filteredHistory.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900 rounded bg-neutral-900/10">
+                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
                   لا توجد صفقات مغلقة في هذا السوق بعد.
                 </div>
               ) : (
                 <>
                   {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded">
+                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
                           <th className="p-4 text-right">السهم</th>
                           <th className="p-4 text-right">المحفظة</th>
                           <th className="p-4 text-right">مدة الاحتفاظ</th>
@@ -958,12 +960,12 @@ export default function Dashboard() {
                           <th className="p-4 text-left">تاريخ الإغلاق</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-900 bg-neutral-950/20">
+                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {filteredHistory.map(item => {
                           const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
                           const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
                           return (
-                            <tr key={item._id} className="hover:bg-neutral-900/20 transition">
+                            <tr key={item._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
                               <td className="p-4 text-neutral-300">
                                 {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
@@ -987,7 +989,7 @@ export default function Dashboard() {
                                   +{item.maxPeakPercentage.toFixed(2)}%
                                 </span>
                               </td>
-                              <td className="p-4 text-left text-neutral-500">{formatDate(item.closedAt)}</td>
+                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(item.closedAt)}</td>
                             </tr>
                           );
                         })}
@@ -1001,7 +1003,7 @@ export default function Dashboard() {
                       const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
                       const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
                       return (
-                        <div key={item._id} className="border border-neutral-900 bg-neutral-950/40 p-4 rounded space-y-3 text-right">
+                        <div key={item._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${item.pnlPercentage > 0 ? 'glow-emerald' : 'glow-rose'}`}>
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
                             <span className="text-[10px] text-neutral-450 font-mono">الاحتفاظ: {item.holdingDuration}</span>
@@ -1036,7 +1038,7 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900 pt-2 text-left">
+                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
                             تاريخ الإغلاق: {formatDate(item.closedAt)}
                           </div>
                         </div>
@@ -1052,15 +1054,15 @@ export default function Dashboard() {
 
       {/* Execute Trade Modal */}
       {isModalOpen && selectedTrade && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-neutral-950 border border-neutral-900 rounded p-6 w-full max-w-md space-y-6 text-right" dir="rtl">
-            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="glass-card p-6 w-full max-w-md space-y-6 text-right rounded-xl border-t-2 border-t-indigo-500" dir="rtl">
+            <div className="flex items-center justify-between border-b border-neutral-900/60 pb-3">
               <h3 className="text-sm font-bold uppercase tracking-wider font-mono text-white">
                 تنفيذ صفقة جديدة / {selectedTrade.symbol}
               </h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="text-neutral-500 hover:text-neutral-300 text-xs font-mono cursor-pointer"
+                className="text-neutral-500 hover:text-neutral-300 text-xs font-mono cursor-pointer transition"
               >
                 [إغلاق]
               </button>
@@ -1074,7 +1076,7 @@ export default function Dashboard() {
                   step="0.01" 
                   value={actualEntryPrice} 
                   onChange={(e) => setActualEntryPrice(Number(e.target.value))}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 text-left font-mono"
+                  className="w-full bg-neutral-950/60 border border-neutral-900 rounded-md p-2.5 text-neutral-100 focus:outline-none focus:border-indigo-500/50 text-left font-mono transition"
                   required
                 />
               </div>
@@ -1087,7 +1089,7 @@ export default function Dashboard() {
                   placeholder="مثال: 5000" 
                   value={positionSize} 
                   onChange={(e) => setPositionSize(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 text-left font-mono"
+                  className="w-full bg-neutral-950/60 border border-neutral-900 rounded-md p-2.5 text-neutral-100 focus:outline-none focus:border-indigo-500/50 text-left font-mono transition"
                   required
                 />
               </div>
@@ -1095,14 +1097,14 @@ export default function Dashboard() {
               <div className="flex gap-3 pt-2">
                 <button 
                   type="submit" 
-                  className="flex-1 py-2.5 bg-neutral-100 hover:bg-white text-neutral-950 font-bold tracking-wider rounded uppercase text-center transition cursor-pointer"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer shadow-[0_0_15px_rgba(99,102,241,0.2)]"
                 >
                   تأكيد التنفيذ
                 </button>
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-600 text-neutral-400 hover:text-neutral-200 font-bold rounded transition cursor-pointer"
+                  className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 font-bold rounded-md transition cursor-pointer"
                 >
                   إلغاء
                 </button>
@@ -1114,15 +1116,15 @@ export default function Dashboard() {
 
       {/* Close Trade Modal */}
       {isCloseModalOpen && selectedPortfolioItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-neutral-950 border border-neutral-900 rounded p-6 w-full max-w-md space-y-6 text-right" dir="rtl">
-            <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="glass-card p-6 w-full max-w-md space-y-6 text-right rounded-xl border-t-2 border-t-rose-500" dir="rtl">
+            <div className="flex items-center justify-between border-b border-neutral-900/60 pb-3">
               <h3 className="text-sm font-bold uppercase tracking-wider font-mono text-white">
                 إغلاق مركز / {selectedPortfolioItem.symbol}
               </h3>
               <button 
                 onClick={() => setIsCloseModalOpen(false)}
-                className="text-neutral-500 hover:text-neutral-300 text-xs font-mono cursor-pointer"
+                className="text-neutral-500 hover:text-neutral-300 text-xs font-mono cursor-pointer transition"
               >
                 [إغلاق]
               </button>
@@ -1136,7 +1138,7 @@ export default function Dashboard() {
                   step="0.01" 
                   value={exitPrice} 
                   onChange={(e) => setExitPrice(Number(e.target.value))}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 text-left font-mono"
+                  className="w-full bg-neutral-950/60 border border-neutral-900 rounded-md p-2.5 text-neutral-100 focus:outline-none focus:border-indigo-500/50 text-left font-mono transition"
                   required
                 />
               </div>
@@ -1146,7 +1148,7 @@ export default function Dashboard() {
                 <select
                   value={closeReason}
                   onChange={(e) => setCloseReason(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded p-2.5 text-neutral-100 focus:outline-none focus:border-neutral-600 font-mono cursor-pointer"
+                  className="w-full bg-neutral-950/60 border border-neutral-900 rounded-md p-2.5 text-neutral-100 focus:outline-none focus:border-indigo-500/50 font-mono cursor-pointer transition"
                   required
                 >
                   <option value="Manual Close">إغلاق يدوي / Manual Close</option>
@@ -1158,14 +1160,14 @@ export default function Dashboard() {
               <div className="flex gap-3 pt-2">
                 <button 
                   type="submit" 
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold tracking-wider rounded uppercase text-center transition cursor-pointer"
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer"
                 >
                   تأكيد الإغلاق
                 </button>
                 <button 
                   type="button" 
                   onClick={() => setIsCloseModalOpen(false)}
-                  className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-600 text-neutral-400 hover:text-neutral-200 font-bold rounded transition cursor-pointer"
+                  className="px-4 py-2.5 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 font-bold rounded-md transition cursor-pointer"
                 >
                   إلغاء
                 </button>
