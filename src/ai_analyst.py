@@ -101,6 +101,16 @@ class GroqAnalyst:
         
         Be balanced and realistic — expect roughly 20-40% of stocks to be BUY on any given day.
 
+        ENTRY PRICE RULES:
+        Do NOT set entry_price equal to the current price
+        Set entry_price 1% to 2% BELOW the current closing price
+        This simulates a limit order entry on a minor pullback
+        Formula: entry_price = close_price * (1 - random between 0.01 and 0.02)
+        Example: if current price = $100, set entry between $98.00 and $99.00
+        stop_loss should be 3% to 5% below entry_price
+        take_profit should give minimum 1.5x Risk-Reward Ratio
+        Formula: take_profit = entry + (entry - stop_loss) * 1.5
+
         Provide your analysis in the exact JSON format below. DO NOT output any markdown, only valid JSON.
 
         {{

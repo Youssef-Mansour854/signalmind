@@ -92,11 +92,17 @@ class SignalPriceUpdater:
             # Logic for activation (Pending -> Active)
             # For BUY signal, it becomes active when current price is <= entry price
             if status == "Pending":
-                if current_price <= entry_price * 1.02:
+                created_at = sig.get("createdAt")
+                created_today = False
+                if created_at:
+                    created_today = created_at.date() == now.date()
+                
+                limit_multiplier = 1.03 if created_today else 1.02
+                if current_price <= entry_price * limit_multiplier:
                     new_status = "Active"
                     update_fields["status"] = "Active"
                     update_fields["activatedAt"] = now
-                    print(f"[ACTIVATED] Signal {symbol} activated! Current price {current_price:.2f} <= entry {entry_price * 1.02:.2f}")
+                    print(f"[ACTIVATED] Signal {symbol} activated! Current price {current_price:.2f} <= entry {entry_price * limit_multiplier:.2f} (buffer: {limit_multiplier:.2f})")
 
             # Logic for target hits (Active/Pending -> Hit TP/SL)
             if new_status in ("Active", "Pending"):

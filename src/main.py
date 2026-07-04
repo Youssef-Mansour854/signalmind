@@ -62,6 +62,33 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
             print(f"Failed to get AI analysis for {symbol}.")
             return {"status": "failed", "symbol": symbol}
 
+        # Server-side validation for realistic entry price
+        if 'entry_price' in analysis:
+            try:
+                ai_entry = float(analysis['entry_price'])
+            except (TypeError, ValueError):
+                ai_entry = 0
+            close_price = float(stock_data.get('close', 0))
+            if ai_entry >= close_price * 0.99:
+                entry_price_val = round(close_price * 0.985, 2)
+                analysis['entry_price'] = entry_price_val
+                
+                try:
+                    ai_sl = float(analysis.get('stop_loss', 0))
+                except (TypeError, ValueError):
+                    ai_sl = 0
+                if ai_sl >= entry_price_val:
+                    ai_sl = round(entry_price_val * 0.96, 2)
+                    analysis['stop_loss'] = ai_sl
+                    
+                try:
+                    ai_tp = float(analysis.get('take_profit', 0))
+                except (TypeError, ValueError):
+                    ai_tp = 0
+                if ai_tp <= entry_price_val:
+                    risk = entry_price_val - ai_sl
+                    analysis['take_profit'] = round(entry_price_val + (risk * 1.5), 2)
+
         # Structure indicators for DB model
         db_indicators = {
             "close": stock_data.get("close"),
@@ -106,7 +133,7 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
         status = "Expired"
         if signal_type == "BUY":
             current_price = float(stock_data.get("close", 0))
-            if current_price <= entry_price * 1.02:
+            if current_price <= entry_price * 1.03:
                 status = "Active"
             else:
                 status = "Pending"
