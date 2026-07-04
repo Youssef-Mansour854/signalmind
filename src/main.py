@@ -102,6 +102,15 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
             ai_confidence=ai_confidence
         )
 
+        # Determine status and initial activation
+        status = "Expired"
+        if signal_type == "BUY":
+            current_price = float(stock_data.get("close", 0))
+            if current_price <= entry_price * 1.02:
+                status = "Active"
+            else:
+                status = "Pending"
+
         # DB Document
         signal_doc = {
             "symbol": symbol,
@@ -112,7 +121,7 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
             "takeProfit": take_profit,
             "currentPrice": float(stock_data.get("close", 0)),
             "maxPriceReached": float(stock_data.get("close", 0)),
-            "status": "Pending" if signal_type == "BUY" else "Expired",
+            "status": status,
             "isNearTP": False,
             "indicators": db_indicators,
             "aiConfidence": ai_confidence,
@@ -122,6 +131,9 @@ async def process_single_stock(symbol: str, index: int, total_stocks: int, sessi
             "createdAt": now,
             "updatedAt": now
         }
+
+        if status == "Active":
+            signal_doc["activatedAt"] = now
 
         # Save to MongoDB via Upsert based on symbol (run in thread)
         res = await asyncio.to_thread(
