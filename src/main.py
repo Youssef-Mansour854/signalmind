@@ -268,8 +268,8 @@ async def main_async():
         holiday_msg = "🏖️ SignalMind\nBoth markets closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
         await asyncio.to_thread(telegram.send_message, holiday_msg)
         
-        # Still run price updater for existing signals
-        await run_price_update()
+        # (Price updater is handled externally by the daily/pipeline workflows)
+        # await run_price_update()
         sys.exit(0)
 
     stocks_to_analyze = []
@@ -382,23 +382,24 @@ async def main_async():
 
     print(f"Finished. Analyzed: {total_stocks}, BUY signals: {buy_signals}, Failed: {failed_stocks}, Skipped: {skipped_stocks}")
 
-    # 4. Update Old Signal Prices Daily
-    print("Running daily signal price updater...")
-    try:
-        from price_updater import SignalPriceUpdater
-        updater = SignalPriceUpdater()
-        await updater.update_active_and_pending_signals()
-    except Exception as e:
-        print(f"Error running daily signal price updater: {e}")
-
-    # 5. Run Trade Tracker (auto-close on TP/SL and update current PnL)
-    print("Running active portfolio trade tracker...")
-    try:
-        from trade_tracker import AsyncTradeTracker
-        tracker = AsyncTradeTracker()
-        await tracker.run_tracking_cycle()
-    except Exception as e:
-        print(f"Error running portfolio trade tracker: {e}")
+    # (Price updater and trade tracker are now run externally as separate steps in the pipeline workflow)
+    # # 4. Update Old Signal Prices Daily
+    # print("Running daily signal price updater...")
+    # try:
+    #     from price_updater import SignalPriceUpdater
+    #     updater = SignalPriceUpdater()
+    #     await updater.update_active_and_pending_signals()
+    # except Exception as e:
+    #     print(f"Error running daily signal price updater: {e}")
+    # 
+    # # 5. Run Trade Tracker (auto-close on TP/SL and update current PnL)
+    # print("Running active portfolio trade tracker...")
+    # try:
+    #     from trade_tracker import AsyncTradeTracker
+    #     tracker = AsyncTradeTracker()
+    #     await tracker.run_tracking_cycle()
+    # except Exception as e:
+    #     print(f"Error running portfolio trade tracker: {e}")
 
     # 6. Run AI Feedback Loop (automatically after main completes on Fridays)
     if day_of_week == 4:

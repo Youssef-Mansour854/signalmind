@@ -24,15 +24,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: "pip" # Caching pip dependencies for faster subsequent runs
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Signalmind Analysis (The Hunter)
+      - name: Step 1 - Update Existing Signal Prices
+        run: python src/price_updater.py
+
+      - name: Step 2 - Run Main Stock Analysis
         run: python src/main.py
 
-      - name: Run Telegram Portfolio Brief (The Telegram Briefer)
+      - name: Step 3 - Track Portfolio Positions
+        run: python src/trade_tracker.py
+
+      - name: Step 4 - Send Portfolio Brief
         run: python src/bot_notifier.py

@@ -33,6 +33,8 @@ class SignalPriceUpdater:
             return self._db_client["signalmind"]
 
     async def update_active_and_pending_signals(self):
+        print(f"[INFO] Price Updater starting - fetching latest prices before analysis...")
+        print(f"[INFO] This ensures analysis uses most recent available market data")
         print("Starting daily signal price updater...")
         signals_col = self.db["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
