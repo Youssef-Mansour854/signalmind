@@ -87,3 +87,16 @@ def is_us_open(check_date: date) -> bool:
     if check_date.weekday() >= 5:  # Saturday=5, Sunday=6
         return False
     return not is_us_holiday(check_date)
+
+def get_market_status(check_date: date) -> str:
+    """Returns which markets are open today."""
+    egx = is_egx_open(check_date)
+    us = is_us_open(check_date)
+    if egx and us:
+        return "BOTH"
+    elif egx:
+        return "EGX_ONLY"
+    elif us:
+        return "US_ONLY"
+    else:
+        return "CLOSED"

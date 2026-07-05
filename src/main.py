@@ -239,6 +239,10 @@ async def main_async():
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
+    # Read market target from environment
+    market_target = os.environ.get("MARKET_TARGET", "BOTH")
+    context_str = f"Analyzer_{market_target}"
+
     # Prevent duplicate runs on the same day (UTC date)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + datetime.timedelta(days=1)
@@ -246,7 +250,7 @@ async def main_async():
         existing_run = await asyncio.to_thread(
             logs_col.find_one,
             {
-                "context": "Analyzer",
+                "context": context_str,
                 "level": "info",
                 "createdAt": {"$gte": today_start, "$lt": today_end}
             }
@@ -259,27 +263,38 @@ async def main_async():
 
     today_date = date.today()
 
-    egx_open = is_egx_open(today_date)
-    us_open = is_us_open(today_date)
-
-    if not egx_open and not us_open:
-        print(f"[INFO] Both markets closed today ({today_date}). Skipping analysis.")
-        # Send Telegram holiday skip message
-        holiday_msg = "🏖️ SignalMind\nBoth markets closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
-        await asyncio.to_thread(telegram.send_message, holiday_msg)
-        
-        # (Price updater is handled externally by the daily/pipeline workflows)
-        # await run_price_update()
-        sys.exit(0)
-
     stocks_to_analyze = []
-    if egx_open:
-        print(f"[INFO] EGX is open today. Analyzing EGX stocks...")
-        stocks_to_analyze += config.EGX_STOCKS
 
-    if us_open:
-        print(f"[INFO] US market is open today. Analyzing US stocks...")
-        stocks_to_analyze += config.US_STOCKS
+    if market_target == "US":
+        if is_us_open(today_date):
+            stocks_to_analyze = config.US_STOCKS
+            print(f"[INFO] Running US-only analysis")
+        else:
+            print(f"[INFO] US market closed today. Skipping.")
+            holiday_msg = "🏖️ SignalMind\nUS market closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
+            await asyncio.to_thread(telegram.send_message, holiday_msg)
+            sys.exit(0)
+
+    elif market_target == "EGX":
+        if is_egx_open(today_date):
+            stocks_to_analyze = config.EGX_STOCKS
+            print(f"[INFO] Running EGX-only analysis")
+        else:
+            print(f"[INFO] EGX market closed today. Skipping.")
+            holiday_msg = "🏖️ SignalMind\nEGX market closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
+            await asyncio.to_thread(telegram.send_message, holiday_msg)
+            sys.exit(0)
+
+    else:  # BOTH
+        if is_us_open(today_date):
+            stocks_to_analyze += config.US_STOCKS
+        if is_egx_open(today_date):
+            stocks_to_analyze += config.EGX_STOCKS
+        if not stocks_to_analyze:
+            print(f"[INFO] Both markets closed today. Skipping.")
+            holiday_msg = "🏖️ SignalMind\nBoth markets closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
+            await asyncio.to_thread(telegram.send_message, holiday_msg)
+            sys.exit(0)
 
     total_stocks = len(stocks_to_analyze)
     # Concurrency limiter
@@ -373,7 +388,7 @@ async def main_async():
             {
                 "level": "info",
                 "message": f"Daily runner finished. Analyzed: {total_stocks}, BUY signals: {buy_signals}, Failed: {failed_stocks}, Skipped: {skipped_stocks}",
-                "context": "Analyzer",
+                "context": f"Analyzer_{market_target}",
                 "createdAt": now
             }
         )
