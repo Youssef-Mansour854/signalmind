@@ -7,11 +7,14 @@ from ranking_engine import PythonRankingEngine
 import sys
 import time
 import datetime
+from datetime import date
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
 import asyncio
 import aiohttp
+from market_holidays import is_egx_open, is_us_open
+from price_updater import run_price_update
 
 # Load env variables at startup
 load_dotenv()
@@ -235,34 +238,48 @@ async def main_async():
         sys.exit(1)
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    day_of_week = now.weekday() # Monday=0, ..., Sunday=6
 
-    # EGX Market is open Sunday-Thursday
-    # US Market is open Monday-Friday
-    # Sunday (6): only EGX stocks
-    # Monday-Thursday (0, 1, 2, 3): both EGX and US stocks
-    # Friday (4): only US stocks
-    # Saturday (5): closed (no stocks to analyze today)
-    egx_open = day_of_week in (6, 0, 1, 2, 3)
-    us_open = day_of_week in (0, 1, 2, 3, 4)
+    # Prevent duplicate runs on the same day (UTC date)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + datetime.timedelta(days=1)
+    try:
+        existing_run = await asyncio.to_thread(
+            logs_col.find_one,
+            {
+                "context": "Analyzer",
+                "level": "info",
+                "createdAt": {"$gte": today_start, "$lt": today_end}
+            }
+        )
+        if existing_run:
+            print("Already ran today, skipping")
+            return
+    except Exception as e:
+        print(f"[WARNING] Error checking for duplicate run: {e}")
+
+    today_date = date.today()
+
+    egx_open = is_egx_open(today_date)
+    us_open = is_us_open(today_date)
 
     if not egx_open and not us_open:
-        print("[INFO] All markets are closed today. Skipping execution.")
-        return
+        print(f"[INFO] Both markets closed today ({today_date}). Skipping analysis.")
+        # Send Telegram holiday skip message
+        holiday_msg = "🏖️ SignalMind\nBoth markets closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
+        await asyncio.to_thread(telegram.send_message, holiday_msg)
+        
+        # Still run price updater for existing signals
+        await run_price_update()
+        sys.exit(0)
 
-    all_stocks = config.US_STOCKS + config.EGX_STOCKS
     stocks_to_analyze = []
-    for symbol in all_stocks:
-        is_egx = symbol.endswith(".CA")
-        if is_egx and not egx_open:
-            continue
-        if not is_egx and not us_open:
-            continue
-        stocks_to_analyze.append(symbol)
+    if egx_open:
+        print(f"[INFO] EGX is open today. Analyzing EGX stocks...")
+        stocks_to_analyze += config.EGX_STOCKS
 
-    if not stocks_to_analyze:
-        print("[INFO] No stocks to analyze for the open markets today.")
-        return
+    if us_open:
+        print(f"[INFO] US market is open today. Analyzing US stocks...")
+        stocks_to_analyze += config.US_STOCKS
 
     total_stocks = len(stocks_to_analyze)
     # Concurrency limiter

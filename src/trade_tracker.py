@@ -9,10 +9,20 @@ from dotenv import load_dotenv
 # Load environmental variables
 load_dotenv()
 
+# MongoDB connection setup
+db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
+try:
+    db_client = MongoClient(db_uri, serverSelectionTimeoutMS=3000)
+    db_client.admin.command('ping')
+    print("[SUCCESS] trade_tracker: Successfully connected to MongoDB")
+except Exception as e:
+    print(f"\n[ERROR] trade_tracker: MongoDB connection error! Details: {e}\n")
+    db_client = None
+
 class AsyncTradeTracker:
     def __init__(self, db_uri=None, db_name="signalmind"):
         self.db_uri = db_uri or os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
-        self._db_client = None
+        self._db_client = db_client if (db_client is not None and db_uri is None) else None
 
     @property
     def db(self):
@@ -27,7 +37,7 @@ class AsyncTradeTracker:
         print("Starting async trade tracking cycle...")
         portfolio_col = self.db["user_portfolio"]
         signals_col = self.db["signals"]
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         # Query open positions where status is 'ACTIVE'
         query = {"status": "ACTIVE"}

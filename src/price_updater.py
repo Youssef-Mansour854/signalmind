@@ -8,10 +8,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# MongoDB connection setup
+db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
+try:
+    db_client = MongoClient(db_uri, serverSelectionTimeoutMS=3000)
+    db_client.admin.command('ping')
+    print("[SUCCESS] price_updater: Successfully connected to MongoDB")
+except Exception as e:
+    print(f"\n[ERROR] price_updater: MongoDB connection error! Details: {e}\n")
+    db_client = None
+
 class SignalPriceUpdater:
     def __init__(self, db_uri=None, db_name="signalmind"):
         self.db_uri = db_uri or os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
-        self._db_client = None
+        self._db_client = db_client if (db_client is not None and db_uri is None) else None
 
     @property
     def db(self):
@@ -54,6 +64,8 @@ class SignalPriceUpdater:
             return
 
         updated_count = 0
+        tp_hits = 0
+        sl_hits = 0
         for sig in active_signals:
             symbol = sig["symbol"]
             status = sig["status"]
@@ -61,6 +73,10 @@ class SignalPriceUpdater:
             take_profit = sig.get("takeProfit", 0)
             stop_loss = sig.get("stopLoss", 0)
             max_price_reached = sig.get("maxPriceReached", 0) or 0
+
+            current_price = None
+            high_price = None
+            low_price = None
 
             try:
                 if len(symbols) == 1:
@@ -72,8 +88,21 @@ class SignalPriceUpdater:
                     high_price = data[symbol]["High"].dropna().iloc[-1]
                     low_price = data[symbol]["Low"].dropna().iloc[-1]
             except Exception as e:
-                print(f"Failed to extract price data for signal {symbol}: {e}")
-                continue
+                # Fallback: try fetching this ticker individually
+                print(f"Batch fetch failed or empty for {symbol}, trying individual fetch...")
+                try:
+                    ticker_data = await asyncio.to_thread(
+                        yf.download,
+                        symbol,
+                        period="5d",
+                        progress=False
+                    )
+                    if not ticker_data.empty:
+                        current_price = ticker_data["Close"].dropna().iloc[-1]
+                        high_price = ticker_data["High"].dropna().iloc[-1]
+                        low_price = ticker_data["Low"].dropna().iloc[-1]
+                except Exception as inner_e:
+                    print(f"Failed to extract price data for signal {symbol} in fallback: {inner_e}")
 
             if current_price is None or str(current_price) == 'nan':
                 continue
@@ -130,6 +159,7 @@ class SignalPriceUpdater:
                     if entry_price > 0:
                         update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
                     print(f"[TP HIT] Signal {symbol} Hit TP! High: {high_price:.2f} >= TP {take_profit:.2f}")
+                    tp_hits += 1
                 elif hit_sl:
                     exit_val = float(stop_loss)
                     update_fields["status"] = "Hit SL"
@@ -138,6 +168,7 @@ class SignalPriceUpdater:
                     if entry_price > 0:
                         update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
                     print(f"[SL HIT] Signal {symbol} Hit SL! Low: {low_price:.2f} <= SL {stop_loss:.2f}")
+                    sl_hits += 1
                 else:
                     # Update max price reached using daily High
                     update_fields["maxPriceReached"] = round(max(max_price_reached, high_price), 4)
@@ -146,11 +177,12 @@ class SignalPriceUpdater:
             await asyncio.to_thread(signals_col.update_one, {"_id": sig["_id"]}, {"$set": update_fields})
             updated_count += 1
 
-        print(f"Successfully updated {updated_count} signals.")
+        print(f"Price Update Complete: {updated_count} signals updated, {tp_hits} hits TP, {sl_hits} hits SL")
 
-async def main():
+async def run_price_update():
     updater = SignalPriceUpdater()
     await updater.update_active_and_pending_signals()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    asyncio.run(run_price_update())

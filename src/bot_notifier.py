@@ -113,7 +113,11 @@ async def run_briefer():
     else:
         print("[INFO] Telegram credentials not found. Portfolio Brief printed to stdout:")
         print("------------------------------------------")
-        print(message)
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            encoding = sys.stdout.encoding or 'utf-8'
+            print(message.encode(encoding, errors='replace').decode(encoding))
         print("------------------------------------------")
 
 def main():
