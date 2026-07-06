@@ -103,8 +103,13 @@ class AsyncTradeTracker:
             high_price = float(high_price) if high_price is not None and str(high_price) != 'nan' else current_price
             low_price = float(low_price) if low_price is not None and str(low_price) != 'nan' else current_price
 
+            # Calculate and update max price reached (must happen before status transition)
+            current_max_price = trade.get("maxPriceReached", 0) or 0
+            max_price = max(current_max_price, high_price)
+
             update_fields = {
                 "currentPrice": round(current_price, 4),
+                "maxPriceReached": round(max_price, 4),
                 "updatedAt": now
             }
 
@@ -173,9 +178,6 @@ class AsyncTradeTracker:
                 if entry_price:
                     update_fields["currentPnL"] = round((current_price - entry_price) * quantity, 4)
                     update_fields["pnlPercentage"] = round(((current_price - entry_price) / entry_price) * 100, 2)
-                
-                max_price = max(trade.get("maxPriceReached", 0) or 0, high_price)
-                update_fields["maxPriceReached"] = round(max_price, 4)
                 
                 await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
 

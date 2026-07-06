@@ -113,8 +113,12 @@ class SignalPriceUpdater:
             high_price = float(high_price) if high_price is not None and str(high_price) != 'nan' else current_price
             low_price = float(low_price) if low_price is not None and str(low_price) != 'nan' else current_price
 
+            # Calculate and update max price reached (must happen before status transition)
+            max_price_reached = max(max_price_reached, high_price)
+
             update_fields = {
                 "currentPrice": round(current_price, 4),
+                "maxPriceReached": round(max_price_reached, 4),
                 "updatedAt": now
             }
 
@@ -171,9 +175,6 @@ class SignalPriceUpdater:
                         update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
                     print(f"[SL HIT] Signal {symbol} Hit SL! Low: {low_price:.2f} <= SL {stop_loss:.2f}")
                     sl_hits += 1
-                else:
-                    # Update max price reached using daily High
-                    update_fields["maxPriceReached"] = round(max(max_price_reached, high_price), 4)
 
             # Update DB
             await asyncio.to_thread(signals_col.update_one, {"_id": sig["_id"]}, {"$set": update_fields})

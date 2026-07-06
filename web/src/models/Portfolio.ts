@@ -11,6 +11,7 @@ export interface IPortfolio extends Document {
   executedAt: Date;
   currentPrice?: number;
   currentPnL?: number;
+  maxPriceReached?: number;
   exitPrice?: number;
   closeDate?: Date;
   closedAt?: Date;
@@ -36,6 +37,7 @@ const PortfolioSchema = new Schema<IPortfolio>(
     executedAt: { type: Date, default: Date.now },
     currentPrice: { type: Number },
     currentPnL: { type: Number },
+    maxPriceReached: { type: Number, default: 0 },
     exitPrice: { type: Number },
     closeDate: { type: Date },
     closedAt: { type: Date },

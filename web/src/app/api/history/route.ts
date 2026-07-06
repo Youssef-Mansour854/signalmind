@@ -54,8 +54,9 @@ export async function GET() {
       const cashPnL = positionSize * (pnlPercentage / 100);
 
       // 3. Max Excursion (Peak %)
-      const maxPrice = s.maxPriceReached || 0;
-      const maxPeakPercentage = (maxPrice > 0 && entryPrice > 0) ? ((maxPrice - entryPrice) / entryPrice) * 100 : pnlPercentage;
+      // Ensure max price is AT LEAST the exit price if the trade was closed successfully
+      const effectiveMax = Math.max(s.maxPriceReached || entryPrice, exitPrice || 0);
+      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
 
       return {
         _id: s._id.toString(),
@@ -88,8 +89,10 @@ export async function GET() {
 
       // 3. Max Excursion (Peak %)
       const associatedSignal = p.signalId as any;
-      const maxPrice = associatedSignal?.maxPriceReached || exitPrice;
-      const maxPeakPercentage = (maxPrice > 0 && entryPrice > 0) ? ((maxPrice - entryPrice) / entryPrice) * 100 : (p.pnlPercentage || 0);
+      const maxPriceReached = p.maxPriceReached || associatedSignal?.maxPriceReached || exitPrice;
+      // Ensure max price is AT LEAST the exit price if the trade was closed successfully
+      const effectiveMax = Math.max(maxPriceReached || entryPrice, exitPrice || 0);
+      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
 
       return {
         _id: p._id.toString(),
