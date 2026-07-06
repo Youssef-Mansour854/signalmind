@@ -2,16 +2,27 @@ name: SignalMind Cloud Pipeline
 
 on:
   schedule:
-    - cron: "0 4 * * 1-5"   # US: 6AM Cairo (Mon-Fri)
-    - cron: "30 12 * * 0-4" # EGX: 2:30PM Cairo = 12:30 UTC (Sun-Thu)
+    - cron: "0 4 * * 1-5"    # US: 6AM Cairo (Mon-Fri)
+    - cron: "30 12 * * 0-4"  # EGX: 2:30PM Cairo (Sun-Thu)
   workflow_dispatch:
+    inputs:
+      market:
+        description: 'Market to analyze'
+        required: true
+        default: 'BOTH'
+        type: choice
+        options:
+          - US
+          - EGX
+          - BOTH
 
 jobs:
-  # Job 1: US Market Analysis (runs at 6AM Cairo using previous day's close)
   us_analysis:
     name: US Market Analysis
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || true
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1-5') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.market == 'US' || inputs.market == 'BOTH'))
     env:
       MONGODB_URI: ${{ secrets.MONGODB_URI }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -34,10 +45,12 @@ jobs:
       - name: Send Brief
         run: python src/bot_notifier.py
 
-  # Job 2: EGX Market Analysis (runs at 3PM Cairo after Egyptian market closes)
   egx_analysis:
     name: EGX Market Analysis
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '30 12 * * 0-4') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.market == 'EGX' || inputs.market == 'BOTH'))
     env:
       MONGODB_URI: ${{ secrets.MONGODB_URI }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
