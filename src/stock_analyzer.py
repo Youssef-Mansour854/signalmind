@@ -6,6 +6,12 @@ from typing import Dict, Optional
 import time
 import yfinance as yf
 
+try:
+    from tvDatafeed import TvDatafeed, Interval
+except ImportError:
+    TvDatafeed = None
+    Interval = None
+
 # Configure request session to bypass blocks
 session = requests.Session()
 session.headers.update({
@@ -17,26 +23,72 @@ class StockAnalyzer:
     def __init__(self, config):
         self.config = config
         self.params = config.INDICATOR_PARAMS
+        self.tv = None
+        if TvDatafeed is not None:
+            try:
+                self.tv = TvDatafeed()
+            except Exception as e:
+                print(f"Warning: Failed to initialize TvDatafeed: {e}")
 
     def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetches historical stock data using yfinance."""
-        try:
-            ticker = yf.Ticker(symbol, session=session)
-            df = ticker.history(period="1y")
-
-            if df.empty:
-                print(f"No data found for {symbol}")
+        """Fetches historical stock data using yfinance for US and tvdatafeed for EGX."""
+        # Check if the ticker symbol ends with .CA (EGX stock)
+        if symbol.endswith(".CA"):
+            if self.tv is None:
+                print(f"TvDatafeed not initialized. Cannot fetch EGX data for {symbol}")
                 return None
+            try:
+                # Extract the core symbol (e.g. SAUD.CA becomes SAUD)
+                core_symbol = symbol.split(".")[0]
+                
+                # Fetch daily historical bars from TradingView
+                df = self.tv.get_hist(
+                    symbol=core_symbol,
+                    exchange='EGX',
+                    interval=Interval.in_daily,
+                    n_bars=250
+                )
+                
+                if df is None or df.empty:
+                    print(f"No data returned from TradingView for EGX symbol {core_symbol}")
+                    return None
 
-            # Select only the columns needed for technical indicators
-            df = df[["Open", "High", "Low", "Close", "Volume"]]
-            df = df.astype(float)
+                # Rename columns from lowercase to capitalized to guarantee absolute compatibility
+                df = df.rename(columns={
+                    'open': 'Open',
+                    'high': 'High',
+                    'low': 'Low',
+                    'close': 'Close',
+                    'volume': 'Volume'
+                })
 
-            return df
+                # Select only the columns needed for technical indicators
+                df = df[["Open", "High", "Low", "Close", "Volume"]]
+                df = df.astype(float)
+                return df
 
-        except Exception as e:
-            print(f"Error fetching data for {symbol}: {e}")
-            return None
+            except Exception as e:
+                print(f"Error fetching EGX data from TradingView for {symbol}: {e}")
+                return None
+        else:
+            # US stock (standard ticker) using yfinance
+            try:
+                ticker = yf.Ticker(symbol, session=session)
+                df = ticker.history(period="1y")
+
+                if df.empty:
+                    print(f"No data found for {symbol}")
+                    return None
+
+                # Select only the columns needed for technical indicators
+                df = df[["Open", "High", "Low", "Close", "Volume"]]
+                df = df.astype(float)
+
+                return df
+
+            except Exception as e:
+                print(f"Error fetching data for {symbol}: {e}")
+                return None
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates technical indicators using ta library."""

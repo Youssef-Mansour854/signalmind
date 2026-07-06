@@ -238,6 +238,7 @@ async def main_async():
         sys.exit(1)
 
     now = datetime.datetime.now(datetime.timezone.utc)
+    day_of_week = now.weekday()
 
     # Read market target from environment
     market_target = os.environ.get("MARKET_TARGET", "BOTH")

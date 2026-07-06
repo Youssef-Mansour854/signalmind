@@ -8,3 +8,4 @@ python-dotenv==1.0.1
 pymongo[srv]==4.6.2
 dnspython==2.6.1
 aiohttp
+git+https://github.com/rongardF/tvdatafeed.git
