@@ -256,9 +256,9 @@ async def main_async():
                 "createdAt": {"$gte": today_start, "$lt": today_end}
             }
         )
-        if existing_run:
-            print("Already ran today, skipping")
-            return
+        #if existing_run:
+            #print("Already ran today, skipping")
+            #return
     except Exception as e:
         print(f"[WARNING] Error checking for duplicate run: {e}")
 

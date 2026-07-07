@@ -3,6 +3,26 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import Portfolio from '@/models/Portfolio';
 
+function formatArabicDuration(start: Date, end: Date): string {
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs <= 0) return 'أقل من ساعة';
+  
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (totalHours < 24) {
+    if (totalHours === 0) return 'أقل من ساعة';
+    if (totalHours === 1) return 'ساعة واحدة';
+    if (totalHours === 2) return 'ساعتان';
+    if (totalHours >= 3 && totalHours <= 10) return `${totalHours} ساعات`;
+    return `${totalHours} ساعة`;
+  }
+  
+  const totalDays = Math.floor(totalHours / 24);
+  if (totalDays === 1) return 'يوم واحد';
+  if (totalDays === 2) return 'يومان';
+  if (totalDays >= 3 && totalDays <= 10) return `${totalDays} أيام`;
+  return `${totalDays} يوم`;
+}
+
 export async function GET(request: Request) {
   try {
     await dbConnect();
@@ -26,58 +46,138 @@ export async function GET(request: Request) {
     }
 
     // 1. Fetch closed signals (AI Shadow Performance)
-    const signalsQuery: any = {
-      status: { $in: ['Hit TP', 'Hit SL'] },
-      createdAt: { $gte: startDate }
-    };
-    if (market) {
-      signalsQuery.market = market;
-    }
-    const closedSignals = await Signal.find(signalsQuery);
+    const closedSignals = await Signal.find({
+      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] }
+    });
 
     // 2. Fetch closed portfolio trades (Actual User Performance)
-    const portfolioQuery: any = {
-      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] },
-      executedAt: { $gte: startDate }
-    };
-    if (market) {
-      portfolioQuery.market = market;
-    }
-    const closedPortfolio = await Portfolio.find(portfolioQuery);
+    const closedPortfolio = await Portfolio.find({
+      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] }
+    }).populate('signalId');
 
-    // Calculate Shadow Metrics
-    const shadowTotal = closedSignals.length;
-    const shadowWins = closedSignals.filter(s => s.status === 'Hit TP').length;
+    // Normalize signals (AI source)
+    const normalizedSignals = closedSignals.map((s) => {
+      const entryPrice = s.entryPrice || 0;
+      const exitPrice = s.currentPrice !== undefined ? s.currentPrice : (s.status === 'Hit TP' ? s.takeProfit : (s.status === 'Hit SL' ? s.stopLoss : s.entryPrice));
+      const closedAt = s.closedAt || s.updatedAt || s.createdAt;
+      const openedAt = s.activatedAt || s.createdAt;
+
+      // Duration
+      const holdingDuration = formatArabicDuration(new Date(openedAt), new Date(closedAt));
+
+      // Cash PnL
+      const positionSize = s.market === 'EGX' ? 5000 : 1000;
+      const pnlPercentage = s.pnlPercentage || 0;
+      const cashPnL = positionSize * (pnlPercentage / 100);
+
+      // Max Excursion
+      const effectiveMax = Math.max(s.maxPriceReached || entryPrice, exitPrice || 0);
+      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
+
+      return {
+        _id: s._id.toString(),
+        symbol: s.symbol,
+        market: s.market,
+        source: 'AI',
+        entryPrice,
+        exitPrice,
+        pnlPercentage,
+        cashPnL: Number(cashPnL.toFixed(2)),
+        maxPeakPercentage: Number(maxPeakPercentage.toFixed(2)),
+        holdingDuration,
+        status: s.status,
+        closedAt
+      };
+    });
+
+    // Normalize portfolio (Actual source)
+    const normalizedPortfolio = closedPortfolio.map((p) => {
+      const entryPrice = p.actualEntryPrice || 0;
+      const exitPrice = p.exitPrice !== undefined ? p.exitPrice : (p.currentPrice !== undefined ? p.currentPrice : entryPrice);
+      const closedAt = p.closedAt || p.updatedAt || p.executedAt;
+      const openedAt = p.executedAt;
+
+      // Duration
+      const holdingDuration = formatArabicDuration(new Date(openedAt), new Date(closedAt));
+
+      // Cash PnL
+      const cashPnL = p.finalPnL !== undefined ? p.finalPnL : (exitPrice - entryPrice) * (p.quantity || 0);
+
+      // Max Excursion
+      const associatedSignal = p.signalId as any;
+      const maxPriceReached = p.maxPriceReached || associatedSignal?.maxPriceReached || exitPrice;
+      const effectiveMax = Math.max(maxPriceReached || entryPrice, exitPrice || 0);
+      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
+
+      return {
+        _id: p._id.toString(),
+        symbol: p.symbol,
+        market: p.market,
+        source: 'Actual',
+        entryPrice,
+        exitPrice,
+        pnlPercentage: p.pnlPercentage || 0,
+        cashPnL: Number(cashPnL.toFixed(2)),
+        maxPeakPercentage: Number(maxPeakPercentage.toFixed(2)),
+        holdingDuration,
+        status: p.status,
+        closedAt
+      };
+    });
+
+    // Combine both arrays
+    const combinedHistory = [...normalizedSignals, ...normalizedPortfolio];
+
+    // Sort by date descending
+    combinedHistory.sort((a, b) => {
+      const dateA = new Date(a.closedAt).getTime();
+      const dateB = new Date(b.closedAt).getTime();
+      return dateB - dateA;
+    });
+
+    // Deduplication
+    const seen = new Set<string>();
+    const deduplicatedHistory = [];
+    for (const item of combinedHistory) {
+      const dateObj = new Date(item.closedAt);
+      const closedDay = dateObj.toISOString().split('T')[0];
+      const key = `${item.source}_${item.symbol}_${closedDay}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicatedHistory.push(item);
+      }
+    }
+
+    // Filter by market if specified
+    let filteredHistory = deduplicatedHistory;
+    if (market) {
+      filteredHistory = filteredHistory.filter(item => item.market === market);
+    }
+
+    // Filter by timeframe
+    if (timeframe !== 'all') {
+      filteredHistory = filteredHistory.filter(item => {
+        const closedDate = new Date(item.closedAt);
+        return closedDate.getTime() >= startDate.getTime();
+      });
+    }
+
+    // Calculate Shadow (AI) Metrics from the deduplicated, filtered dataset
+    const shadowTrades = filteredHistory.filter(item => item.source === 'AI');
+    const shadowTotal = shadowTrades.length;
+    const shadowWins = shadowTrades.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP' || item.status === 'CLOSED_WIN').length;
     const shadowWinRate = shadowTotal > 0 ? Math.round((shadowWins / shadowTotal) * 100) : 0;
     const shadowAvgPnl = shadowTotal > 0 
-      ? Number((closedSignals.reduce((acc, curr) => acc + (curr.pnlPercentage || 0), 0) / shadowTotal).toFixed(2))
+      ? Number((shadowTrades.reduce((acc, curr) => acc + curr.pnlPercentage, 0) / shadowTotal).toFixed(2))
       : 0;
 
-    // Calculate Actual Metrics
-    const actualTotal = closedPortfolio.length;
-    const actualWins = closedPortfolio.filter(p => {
-      if (p.status === 'Hit TP') return true;
-      if (p.status === 'Hit SL') return false;
-      // For status === 'CLOSED' (manual close)
-      const pnl = p.finalPnL !== undefined ? p.finalPnL : (p.pnlPercentage || 0);
-      return pnl > 0;
-    }).length;
+    // Calculate Actual Metrics from the deduplicated, filtered dataset
+    const actualTrades = filteredHistory.filter(item => item.source === 'Actual');
+    const actualTotal = actualTrades.length;
+    const actualWins = actualTrades.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP' || item.status === 'CLOSED_WIN').length;
     const actualWinRate = actualTotal > 0 ? Math.round((actualWins / actualTotal) * 100) : 0;
-    
     const actualAvgPnl = actualTotal > 0
-      ? Number((closedPortfolio.reduce((acc, curr) => {
-          let pnlPct = curr.pnlPercentage;
-          if (pnlPct === undefined) {
-            const entry = curr.actualEntryPrice;
-            const exit = curr.exitPrice;
-            if (entry > 0 && exit !== undefined) {
-              pnlPct = ((exit - entry) / entry) * 100;
-            } else {
-              pnlPct = 0;
-            }
-          }
-          return acc + pnlPct;
-        }, 0) / actualTotal).toFixed(2))
+      ? Number((actualTrades.reduce((acc, curr) => acc + curr.pnlPercentage, 0) / actualTotal).toFixed(2))
       : 0;
 
     return NextResponse.json({
