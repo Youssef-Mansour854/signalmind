@@ -65,12 +65,15 @@ interface HistoryItem {
   source: 'AI' | 'Actual';
   entryPrice: number;
   exitPrice: number;
+  exit_price?: number;
+  currentPrice?: number;
   pnlPercentage: number;
   cashPnL: number;
   maxPeakPercentage: number;
   holdingDuration: string;
   status: string;
   closedAt: string;
+  closed_at?: string;
 }
 
 export default function Dashboard() {
@@ -239,10 +242,10 @@ export default function Dashboard() {
 
   // Filter lists based on the selected market tab and status compatibility checks
   const rawActiveTrades = trades.filter(t => (t.status === 'ACTIVE' || t.status === 'Active' || t.status === 'Pending') && t.market === marketFilter);
-  const realizedWins = trades.filter(t => (t.status === 'CLOSED_WIN' || t.status === 'Hit TP') && t.market === marketFilter);
-  const triggeredLosses = trades.filter(t => (t.status === 'CLOSED_LOSS' || t.status === 'Hit SL') && t.market === marketFilter);
   const activePortfolio = portfolio.filter(p => p.status === 'ACTIVE' && p.market === marketFilter);
   const filteredHistory = history.filter(item => item.market === marketFilter);
+  const realizedWins = filteredHistory.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP');
+  const triggeredLosses = filteredHistory.filter(item => item.pnlPercentage < 0 || item.status === 'Hit SL');
 
   const totalPortfolioValue = activePortfolio.reduce((sum, item) => {
     const current = item.currentPrice || item.actualEntryPrice || 0;
@@ -797,7 +800,7 @@ export default function Dashboard() {
                       </thead>
                       <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {realizedWins.map(trade => {
-                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
                           return (
                             <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
@@ -819,7 +822,7 @@ export default function Dashboard() {
                   {/* Mobile View */}
                   <div className="md:hidden space-y-4">
                     {realizedWins.map(trade => {
-                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
                       return (
                         <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-emerald">
                           <div className="flex items-center justify-between">
@@ -878,7 +881,7 @@ export default function Dashboard() {
                       </thead>
                       <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
                         {triggeredLosses.map(trade => {
-                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
                           return (
                             <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
@@ -900,7 +903,7 @@ export default function Dashboard() {
                   {/* Mobile View */}
                   <div className="md:hidden space-y-4">
                     {triggeredLosses.map(trade => {
-                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice;
+                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
                       return (
                         <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-rose">
                           <div className="flex items-center justify-between">

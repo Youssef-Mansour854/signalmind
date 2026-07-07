@@ -1,3 +1,4 @@
+import os
 import requests
 import pandas as pd
 import ta
@@ -30,13 +31,35 @@ class StockAnalyzer:
             except Exception as e:
                 print(f"Warning: Failed to initialize TvDatafeed: {e}")
 
-    def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetches historical stock data using yfinance for US and tvdatafeed for EGX."""
-        # Check if the ticker symbol ends with .CA (EGX stock)
-        if symbol.endswith(".CA"):
-            if self.tv is None:
-                print(f"TvDatafeed not initialized. Cannot fetch EGX data for {symbol}")
+    def _fetch_yfinance(self, symbol: str) -> Optional[pd.DataFrame]:
+        """Fetches historical stock data using yfinance."""
+        try:
+            ticker = yf.Ticker(symbol, session=session)
+            df = ticker.history(period="1y")
+
+            if df.empty:
+                print(f"No data found for {symbol} via yfinance")
                 return None
+
+            # Select only the columns needed for technical indicators
+            df = df[["Open", "High", "Low", "Close", "Volume"]]
+            df = df.astype(float)
+
+            return df
+
+        except Exception as e:
+            print(f"Error fetching data for {symbol} via yfinance: {e}")
+            return None
+
+    def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
+        """Fetches historical stock data using yfinance for US/EGX fallbacks and tvdatafeed for EGX (when local)."""
+        is_github_actions = os.environ.get('GITHUB_ACTIONS') == 'true'
+
+        # Check if the ticker symbol ends with .CA (EGX stock)
+        if symbol.endswith(".CA") and not is_github_actions:
+            if self.tv is None:
+                print(f"Warning: TvDatafeed not initialized. Falling back to yfinance for {symbol}")
+                return self._fetch_yfinance(symbol)
             try:
                 # Extract the core symbol (e.g. SAUD.CA becomes SAUD)
                 core_symbol = symbol.split(".")[0]
@@ -50,8 +73,8 @@ class StockAnalyzer:
                 )
                 
                 if df is None or df.empty:
-                    print(f"No data returned from TradingView for EGX symbol {core_symbol}")
-                    return None
+                    print(f"Warning: No data returned from TradingView for EGX symbol {core_symbol}. Falling back to yfinance.")
+                    return self._fetch_yfinance(symbol)
 
                 # Rename columns from lowercase to capitalized to guarantee absolute compatibility
                 df = df.rename(columns={
@@ -68,27 +91,11 @@ class StockAnalyzer:
                 return df
 
             except Exception as e:
-                print(f"Error fetching EGX data from TradingView for {symbol}: {e}")
-                return None
+                print(f"Warning: Error fetching EGX data from TradingView for {symbol}: {e}. Falling back to yfinance.")
+                return self._fetch_yfinance(symbol)
         else:
-            # US stock (standard ticker) using yfinance
-            try:
-                ticker = yf.Ticker(symbol, session=session)
-                df = ticker.history(period="1y")
-
-                if df.empty:
-                    print(f"No data found for {symbol}")
-                    return None
-
-                # Select only the columns needed for technical indicators
-                df = df[["Open", "High", "Low", "Close", "Volume"]]
-                df = df.astype(float)
-
-                return df
-
-            except Exception as e:
-                print(f"Error fetching data for {symbol}: {e}")
-                return None
+            # US stock (standard ticker) or EGX on GitHub Actions / Local fallback using yfinance
+            return self._fetch_yfinance(symbol)
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates technical indicators using ta library."""
