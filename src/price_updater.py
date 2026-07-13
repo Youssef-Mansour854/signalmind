@@ -73,7 +73,7 @@ class SignalPriceUpdater:
             status = sig["status"]
             entry_price = sig.get("entryPrice", 0)
             take_profit = sig.get("takeProfit", 0)
-            stop_loss = sig.get("stopLoss", 0)
+            stop_loss = sig.get("stopLoss") or sig.get("stop_loss") or 0
             max_price_reached = sig.get("maxPriceReached", 0) or 0
 
             current_price = None
@@ -141,6 +141,16 @@ class SignalPriceUpdater:
 
             # Logic for target hits (Active/Pending -> Hit TP/SL)
             if new_status in ("Active", "Pending"):
+                # Break-even Defense Mechanism (+2% profit threshold)
+                if entry_price > 0:
+                    profit_pct = (current_price - entry_price) / entry_price
+                    if profit_pct >= 0.02 and stop_loss < entry_price:
+                        new_sl_value = round(entry_price * 1.002, 4)
+                        stop_loss = new_sl_value
+                        update_fields["stop_loss"] = new_sl_value
+                        update_fields["stopLoss"] = new_sl_value
+                        print(f"[DEFENSE] Moved Stop Loss to Break-even for {symbol}.")
+
                 tp_hit = bool(take_profit and high_price >= take_profit)
                 sl_hit = bool(stop_loss and low_price <= stop_loss)
                 

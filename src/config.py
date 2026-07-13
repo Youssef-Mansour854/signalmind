@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Environment variables
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+raw_groq_keys = os.environ.get("GROQ_API_KEYS") or os.environ.get("GROQ_API_KEY", "")
+GROQ_API_KEYS: List[str] = [k.strip() for k in raw_groq_keys.split(",") if k.strip()]
+GROQ_API_KEY = GROQ_API_KEYS[0] if GROQ_API_KEYS else None
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -72,8 +74,8 @@ DISCLAIMER_TEXT = "هذه التوصيات للأغراض التعليمية ف�
 def validate_config():
     """Validates that all required environment variables are set."""
     missing_vars = []
-    if not GROQ_API_KEY:
-        missing_vars.append("GROQ_API_KEY")
+    if not GROQ_API_KEYS:
+        missing_vars.append("GROQ_API_KEYS")
     
     # Telegram credentials are now optional. Print a warning instead of raising an error.
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:

@@ -1,19 +1,54 @@
+import asyncio
+import time
 import requests
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from pymongo import MongoClient
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 class GroqAnalyst:
-    def __init__(self, config):
+    current_key_index: int = 0
+
+    def __init__(self, config=None):
         self.config = config
-        self.api_key = getattr(config, "GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
-        self.db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
         
-        # Initialize client lazily
+        # Parse GROQ_API_KEYS into a list of strings
+        raw_keys = getattr(config, "GROQ_API_KEYS", None)
+        if not raw_keys:
+            env_keys = os.environ.get("GROQ_API_KEYS") or os.environ.get("GROQ_API_KEY", "")
+            self.api_keys: List[str] = [k.strip() for k in env_keys.split(",") if k.strip()]
+        elif isinstance(raw_keys, list):
+            self.api_keys = raw_keys
+        else:
+            self.api_keys = [k.strip() for k in str(raw_keys).split(",") if k.strip()]
+
+        if not self.api_keys:
+            fallback = getattr(config, "GROQ_API_KEY", os.environ.get("GROQ_API_KEY"))
+            if fallback:
+                self.api_keys = [fallback]
+
+        self.db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
         self._db_client = None
+
+    @property
+    def api_key(self) -> str:
+        """Dynamic getter returning the currently active API key."""
+        return self.get_current_api_key()
+
+    def get_current_api_key(self) -> str:
+        if not self.api_keys:
+            return ""
+        idx = GroqAnalyst.current_key_index % len(self.api_keys)
+        return self.api_keys[idx]
+
+    def rotate_api_key(self) -> str:
+        if not self.api_keys:
+            return ""
+        GroqAnalyst.current_key_index = (GroqAnalyst.current_key_index + 1) % len(self.api_keys)
+        print(f"[WARNING] Groq rate limit hit. Rotating API key...")
+        return self.get_current_api_key()
 
     @property
     def db(self):
@@ -124,52 +159,69 @@ class GroqAnalyst:
         return prompt
 
     async def analyze(self, stock_data: Dict[str, Any], session) -> Dict[str, Any]:
-        """Calls Groq API to analyze the data asynchronously."""
+        """Calls Groq API to analyze the data asynchronously with automatic API key rotation."""
         prompt = self.generate_prompt(stock_data)
         
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": getattr(self.config, "GROQ_MODEL", "llama-3.3-70b-versatile"),
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an expert AI stock analyst. You provide objective technical analysis. You must always output ONLY valid JSON with no markdown."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 1000
-        }
+        num_keys = len(self.api_keys) if self.api_keys else 1
+        attempts = 0
 
-        async with session.post(GROQ_API_URL, headers=headers, json=payload) as response:
-            if response.status == 429:
-                raise Exception("429 Rate Limit")
-                
-            response.raise_for_status()
-            
-            response_json = await response.json()
-            response_text = response_json["choices"][0]["message"]["content"]
-            response_text = response_text.replace("```json", "").replace("```", "").strip()
+        while attempts < num_keys:
+            current_key = self.get_current_api_key()
+            headers = {
+                "Authorization": f"Bearer {current_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": getattr(self.config, "GROQ_MODEL", "llama-3.3-70b-versatile") if self.config else "llama-3.3-70b-versatile",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert AI stock analyst. You provide objective technical analysis. You must always output ONLY valid JSON with no markdown."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.3,
+                "max_tokens": 1000
+            }
 
-            analysis = json.loads(response_text)
+            try:
+                async with session.post(GROQ_API_URL, headers=headers, json=payload) as response:
+                    if response.status == 429:
+                        raise Exception("429 Rate Limit")
+                        
+                    response.raise_for_status()
+                    
+                    response_json = await response.json()
+                    response_text = response_json["choices"][0]["message"]["content"]
+                    response_text = response_text.replace("```json", "").replace("```", "").strip()
 
-            # Map reasoning_ar to explanation_arabic
-            if "reasoning_ar" in analysis and "explanation_arabic" not in analysis:
-                analysis["explanation_arabic"] = analysis["reasoning_ar"]
+                    analysis = json.loads(response_text)
 
-            # Map default fields if not returned by LLM
-            if "confidence" not in analysis:
-                analysis["confidence"] = "Medium"
-            if "risk" not in analysis:
-                analysis["risk"] = "Medium"
+                    # Map reasoning_ar to explanation_arabic
+                    if "reasoning_ar" in analysis and "explanation_arabic" not in analysis:
+                        analysis["explanation_arabic"] = analysis["reasoning_ar"]
 
-            signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
-            analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
+                    # Map default fields if not returned by LLM
+                    if "confidence" not in analysis:
+                        analysis["confidence"] = "Medium"
+                    if "risk" not in analysis:
+                        analysis["risk"] = "Medium"
 
-            return analysis
+                    signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
+                    analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
+
+                    return analysis
+            except Exception as e:
+                if "429" in str(e):
+                    attempts += 1
+                    if attempts < num_keys:
+                        self.rotate_api_key()
+                        continue
+                raise e
+
+        print("[WARNING] All Groq API keys returned 429 sequentially. Applying fallback sleep...")
+        await asyncio.sleep(5.0)
+        raise Exception("429 Rate Limit - All API keys exhausted")

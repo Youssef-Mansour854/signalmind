@@ -26,8 +26,9 @@ class AIFeedbackLoop:
         self.db = db
         self.signals_col = self.db["signals"]
         self.portfolio_col = self.db["user_portfolio"]
-        self.feedback_col = self.db["aifeedbacks"]
-        self.groq_api_key = os.environ.get("GROQ_API_KEY")
+        raw_keys = os.environ.get("GROQ_API_KEYS") or os.environ.get("GROQ_API_KEY", "")
+        self.groq_api_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+        self.groq_api_key = self.groq_api_keys[0] if self.groq_api_keys else None
 
     def get_closed_trades_count(self) -> int:
         now = datetime.datetime.utcnow()
@@ -169,11 +170,14 @@ class AIFeedbackLoop:
         # 4. Call LLM for self-assessment
         # 4. Call LLM for self-assessment
         insights = None
-        retries = 3
-        for attempt in range(retries):
+        num_keys = len(self.groq_api_keys) if self.groq_api_keys else 1
+        key_idx = 0
+        
+        while key_idx < num_keys:
+            active_key = self.groq_api_keys[key_idx] if self.groq_api_keys else self.groq_api_key
             try:
                 headers = {
-                    "Authorization": f"Bearer {self.groq_api_key}",
+                    "Authorization": f"Bearer {active_key}",
                     "Content-Type": "application/json"
                 }
                 payload = {
@@ -193,11 +197,11 @@ class AIFeedbackLoop:
                 }
                 response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
                 
-                if response.status_code == 429 and attempt < retries - 1:
-                    import time
-                    print(f"[INFO] Groq 429 rate limit hit in feedback loop. Retrying in 15.0s (attempt {attempt+1}/{retries})...")
-                    time.sleep(15.0)
-                    continue
+                if response.status_code == 429:
+                    print(f"[WARNING] Groq rate limit hit. Rotating API key...")
+                    key_idx += 1
+                    if key_idx < num_keys:
+                        continue
                 
                 response.raise_for_status()
                 
@@ -208,14 +212,13 @@ class AIFeedbackLoop:
                 insights = json.loads(content)
                 break
             except Exception as e:
-                if attempt < retries - 1:
-                    import time
-                    print(f"Error in Groq call, retrying in 15.0s: {e}")
-                    time.sleep(15.0)
-                    continue
-                else:
-                    print(f"Error in Weekly AI Feedback Loop: {e}")
-                    return
+                if "429" in str(e):
+                    key_idx += 1
+                    if key_idx < num_keys:
+                        print(f"[WARNING] Groq rate limit hit. Rotating API key...")
+                        continue
+                print(f"Error in Weekly AI Feedback Loop: {e}")
+                return
 
         try:
             # Save feedback log to DB
