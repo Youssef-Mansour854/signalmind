@@ -656,116 +656,148 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {sortedActiveTrades.map(trade => (
-                          <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
-                            <td className="p-4 font-bold text-white tracking-wide">
-                              <div>{trade.symbol}</div>
-                              <div className="text-[10px] text-neutral-500 mt-1 font-mono">
-                                عائد:{' '}
-                                <span dir="ltr" className="inline-block">
-                                  +{trade.expectedProfitPct.toFixed(1)}%
-                                </span>{' '}
-                                | RRR: {trade.rrr.toFixed(2)}
-                              </div>
-                              <div className="mt-1">
-                                {trade.status === 'Pending' && (
-                                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
-                                    Pending
+                        {sortedActiveTrades.map(trade => {
+                          const isRiskFree = trade.stopLoss >= trade.entryPrice * 0.999;
+                          const isHighRRR = trade.rrr >= 2.0;
+
+                          return (
+                            <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
+                              <td className="p-4 font-bold text-white tracking-wide">
+                                <div>{trade.symbol}</div>
+                                <div className="text-[10px] text-neutral-500 mt-1 font-mono">
+                                  عائد:{' '}
+                                  <span dir="ltr" className="inline-block">
+                                    +{trade.expectedProfitPct.toFixed(1)}%
+                                  </span>{' '}
+                                  | RRR:{' '}
+                                  <span dir="ltr" className={`inline-block ${isHighRRR ? 'text-amber-400 font-black tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'text-neutral-400'}`}>
+                                    {trade.rrr.toFixed(2)}
                                   </span>
-                                )}
-                                {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
-                            <td className="p-4 text-rose-400/90 font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</td>
-                            <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
-                              {trade.explanationArabic}
-                            </td>
-                            <td className="p-4 text-center">
-                              <button
-                                onClick={() => {
-                                  setSelectedTrade(trade);
-                                  setActualEntryPrice(trade.entryPrice);
-                                  setPositionSize('');
-                                  setIsModalOpen(true);
-                                }}
-                                className="px-3 py-1 text-[10px] border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer"
-                              >
-                                تنفيذ الصفقة
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {trade.status === 'Pending' && (
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
+                                      Pending
+                                    </span>
+                                  )}
+                                  {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
+                                      Active
+                                    </span>
+                                  )}
+                                  {isRiskFree && (
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 rounded-full font-mono animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.35)] inline-flex items-center gap-1">
+                                      🛡️ مؤمنة
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4 text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                              <td className="p-4 text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
+                              <td className={`p-4 font-mono ${isRiskFree ? 'text-emerald-400 font-bold drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]' : 'text-rose-400/90'}`}>
+                                <div>{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</div>
+                                {isRiskFree && <span className="text-[9px] text-emerald-400/90 font-sans font-bold block">بدون مخاطرة 🛡️</span>}
+                              </td>
+                              <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
+                                {trade.explanationArabic}
+                              </td>
+                              <td className="p-4 text-center">
+                                <button
+                                  onClick={() => {
+                                    setSelectedTrade(trade);
+                                    setActualEntryPrice(trade.entryPrice);
+                                    setPositionSize('');
+                                    setIsModalOpen(true);
+                                  }}
+                                  className="px-3 py-1 text-[10px] border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer"
+                                >
+                                  تنفيذ الصفقة
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
                   {/* Mobile View */}
                   <div className="md:hidden space-y-4">
-                    {sortedActiveTrades.map(trade => (
-                      <div key={trade._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${(trade.status === 'Active' || trade.status === 'ACTIVE') ? 'glow-emerald' : 'glow-amber'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                            <span className="text-[9px] text-neutral-500 mr-2 font-mono" dir="ltr">
-                              +{trade.expectedProfitPct.toFixed(1)}% | R: {trade.rrr.toFixed(1)}
-                            </span>
-                          </div>
-                          <div>
-                            {trade.status === 'Pending' && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-mono font-bold">
-                                معلق
+                    {sortedActiveTrades.map(trade => {
+                      const isRiskFree = trade.stopLoss >= trade.entryPrice * 0.999;
+                      const isHighRRR = trade.rrr >= 2.0;
+
+                      return (
+                        <div key={trade._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${isRiskFree ? 'border-r-4 border-r-emerald-400 glow-emerald' : ((trade.status === 'Active' || trade.status === 'ACTIVE') ? 'glow-emerald' : 'glow-amber')}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
+                              <span className="text-[9px] text-neutral-500 mr-2 font-mono" dir="ltr">
+                                +{trade.expectedProfitPct.toFixed(1)}% | R:{' '}
+                                <span className={isHighRRR ? 'text-amber-400 font-black' : 'text-neutral-400'}>
+                                  {trade.rrr.toFixed(1)}
+                                </span>
                               </span>
-                            )}
-                            {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-mono font-bold">
-                                نشط
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {trade.status === 'Pending' && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-mono font-bold">
+                                  معلق
+                                </span>
+                              )}
+                              {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-mono font-bold">
+                                  نشط
+                                </span>
+                              )}
+                              {isRiskFree && (
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 rounded-full font-mono animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                                  🛡️ مؤمنة
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
+                              <span className="text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
+                              <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">هدف الربح:</span>
+                              <span className="text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-500 block text-[10px]">وقف الخسارة:</span>
+                              <span className={`font-mono ${isRiskFree ? 'text-emerald-400 font-bold' : 'text-rose-400/90'}`}>
+                                {formatPrice(trade.stopLoss, trade.market, trade.symbol)}
+                                {isRiskFree && <span className="text-[9px] block text-emerald-400/90 font-sans font-bold">بدون مخاطرة 🛡️</span>}
                               </span>
-                            )}
+                            </div>
+                          </div>
+                          <div className="text-neutral-300 text-xs bg-neutral-950/40 p-2.5 rounded border border-neutral-900/60 leading-relaxed font-light">
+                            {trade.explanationArabic}
+                          </div>
+                          <div className="pt-2 border-t border-neutral-900/50">
+                            <button
+                              onClick={() => {
+                                setSelectedTrade(trade);
+                                setActualEntryPrice(trade.entryPrice);
+                                setPositionSize('');
+                                setIsModalOpen(true);
+                              }}
+                              className="w-full py-2 border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer text-[10px] text-center"
+                            >
+                              تنفيذ الصفقة
+                            </button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-neutral-500 block text-[10px]">السعر الحالي:</span>
-                            <span className="text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                            <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[10px]">هدف الربح:</span>
-                            <span className="text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
-                          </div>
-                          <div>
-                            <span className="text-neutral-500 block text-[10px]">وقف الخسارة:</span>
-                            <span className="text-rose-400/90 font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
-                          </div>
-                        </div>
-                        <div className="text-neutral-300 text-xs bg-neutral-950/40 p-2.5 rounded border border-neutral-900/60 leading-relaxed font-light">
-                          {trade.explanationArabic}
-                        </div>
-                        <div className="pt-2 border-t border-neutral-900/50">
-                          <button
-                            onClick={() => {
-                              setSelectedTrade(trade);
-                              setActualEntryPrice(trade.entryPrice);
-                              setPositionSize('');
-                              setIsModalOpen(true);
-                            }}
-                            className="w-full py-2 border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer text-[10px] text-center"
-                          >
-                            تنفيذ الصفقة
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
