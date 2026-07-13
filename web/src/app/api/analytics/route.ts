@@ -1,37 +1,14 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/mongodb';
-import Signal from '@/models/Signal';
-import Portfolio from '@/models/Portfolio';
-
-function formatArabicDuration(start: Date, end: Date): string {
-  const diffMs = end.getTime() - start.getTime();
-  if (diffMs <= 0) return 'أقل من ساعة';
-  
-  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (totalHours < 24) {
-    if (totalHours === 0) return 'أقل من ساعة';
-    if (totalHours === 1) return 'ساعة واحدة';
-    if (totalHours === 2) return 'ساعتان';
-    if (totalHours >= 3 && totalHours <= 10) return `${totalHours} ساعات`;
-    return `${totalHours} ساعة`;
-  }
-  
-  const totalDays = Math.floor(totalHours / 24);
-  if (totalDays === 1) return 'يوم واحد';
-  if (totalDays === 2) return 'يومان';
-  if (totalDays >= 3 && totalDays <= 10) return `${totalDays} أيام`;
-  return `${totalDays} يوم`;
-}
+import { getCleanedHistory } from '@/lib/historyHelper';
 
 export async function GET(request: Request) {
   try {
-    await dbConnect();
     const { searchParams } = new URL(request.url);
     const timeframe = searchParams.get('timeframe') || 'all';
-    const market = searchParams.get('market'); // US or EGX
+    const market = searchParams.get('market'); // US, EGX, or ALL
 
     const now = new Date();
-    let startDate = new Date(0); // default to all time
+    let startDate = new Date(0);
 
     if (timeframe === 'weekly') {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -45,112 +22,11 @@ export async function GET(request: Request) {
       startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
     }
 
-    // 1. Fetch closed signals (AI Shadow Performance)
-    const closedSignals = await Signal.find({
-      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] }
-    });
-
-    // 2. Fetch closed portfolio trades (Actual User Performance)
-    const closedPortfolio = await Portfolio.find({
-      status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] }
-    }).populate('signalId');
-
-    // Normalize signals (AI source)
-    const normalizedSignals = closedSignals.map((s) => {
-      const entryPrice = s.entryPrice || 0;
-      const exitPrice = s.currentPrice !== undefined ? s.currentPrice : (s.status === 'Hit TP' ? s.takeProfit : (s.status === 'Hit SL' ? s.stopLoss : s.entryPrice));
-      const closedAt = s.closedAt || s.updatedAt || s.createdAt;
-      const openedAt = s.activatedAt || s.createdAt;
-
-      // Duration
-      const holdingDuration = formatArabicDuration(new Date(openedAt), new Date(closedAt));
-
-      // Cash PnL
-      const positionSize = s.market === 'EGX' ? 5000 : 1000;
-      const pnlPercentage = s.pnlPercentage || 0;
-      const cashPnL = positionSize * (pnlPercentage / 100);
-
-      // Max Excursion
-      const effectiveMax = Math.max(s.maxPriceReached || entryPrice, exitPrice || 0);
-      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
-
-      return {
-        _id: s._id.toString(),
-        symbol: s.symbol,
-        market: s.market,
-        source: 'AI',
-        entryPrice,
-        exitPrice,
-        pnlPercentage,
-        cashPnL: Number(cashPnL.toFixed(2)),
-        maxPeakPercentage: Number(maxPeakPercentage.toFixed(2)),
-        holdingDuration,
-        status: s.status,
-        closedAt
-      };
-    });
-
-    // Normalize portfolio (Actual source)
-    const normalizedPortfolio = closedPortfolio.map((p) => {
-      const entryPrice = p.actualEntryPrice || 0;
-      const exitPrice = p.exitPrice !== undefined ? p.exitPrice : (p.currentPrice !== undefined ? p.currentPrice : entryPrice);
-      const closedAt = p.closedAt || p.updatedAt || p.executedAt;
-      const openedAt = p.executedAt;
-
-      // Duration
-      const holdingDuration = formatArabicDuration(new Date(openedAt), new Date(closedAt));
-
-      // Cash PnL
-      const cashPnL = p.finalPnL !== undefined ? p.finalPnL : (exitPrice - entryPrice) * (p.quantity || 0);
-
-      // Max Excursion
-      const associatedSignal = p.signalId as any;
-      const maxPriceReached = p.maxPriceReached || associatedSignal?.maxPriceReached || exitPrice;
-      const effectiveMax = Math.max(maxPriceReached || entryPrice, exitPrice || 0);
-      const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
-
-      return {
-        _id: p._id.toString(),
-        symbol: p.symbol,
-        market: p.market,
-        source: 'Actual',
-        entryPrice,
-        exitPrice,
-        pnlPercentage: p.pnlPercentage || 0,
-        cashPnL: Number(cashPnL.toFixed(2)),
-        maxPeakPercentage: Number(maxPeakPercentage.toFixed(2)),
-        holdingDuration,
-        status: p.status,
-        closedAt
-      };
-    });
-
-    // Combine both arrays
-    const combinedHistory = [...normalizedSignals, ...normalizedPortfolio];
-
-    // Sort by date descending
-    combinedHistory.sort((a, b) => {
-      const dateA = new Date(a.closedAt).getTime();
-      const dateB = new Date(b.closedAt).getTime();
-      return dateB - dateA;
-    });
-
-    // Deduplication
-    const seen = new Set<string>();
-    const deduplicatedHistory = [];
-    for (const item of combinedHistory) {
-      const dateObj = new Date(item.closedAt);
-      const closedDay = dateObj.toISOString().split('T')[0];
-      const key = `${item.source}_${item.symbol}_${closedDay}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        deduplicatedHistory.push(item);
-      }
-    }
+    const deduplicatedHistory = await getCleanedHistory();
 
     // Filter by market if specified
     let filteredHistory = deduplicatedHistory;
-    if (market) {
+    if (market && market !== 'ALL') {
       filteredHistory = filteredHistory.filter(item => item.market === market);
     }
 
@@ -162,7 +38,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // Calculate Shadow (AI) Metrics from the deduplicated, filtered dataset
+    // Calculate Shadow (AI) Metrics from deduplicated, filtered dataset of explicitly closed trades
     const shadowTrades = filteredHistory.filter(item => item.source === 'AI');
     const shadowTotal = shadowTrades.length;
     const shadowWins = shadowTrades.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP' || item.status === 'CLOSED_WIN').length;
@@ -171,7 +47,7 @@ export async function GET(request: Request) {
       ? Number((shadowTrades.reduce((acc, curr) => acc + curr.pnlPercentage, 0) / shadowTotal).toFixed(2))
       : 0;
 
-    // Calculate Actual Metrics from the deduplicated, filtered dataset
+    // Calculate Actual Metrics from deduplicated, filtered dataset of explicitly closed trades
     const actualTrades = filteredHistory.filter(item => item.source === 'Actual');
     const actualTotal = actualTrades.length;
     const actualWins = actualTrades.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP' || item.status === 'CLOSED_WIN').length;
