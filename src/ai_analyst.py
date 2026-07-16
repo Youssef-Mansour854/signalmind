@@ -153,6 +153,11 @@ class GroqAnalyst:
         - "شهري" (Monthly) for long-term setups (few months to a year)
         - "استثمار سنوي" (Annual Investment) for long-term fundamental/investing setups (more than a year)
 
+        SIGNAL STRENGTH RULES:
+        Classify the setup's signal strength based on the technical confluence as ONE of the following:
+        - "قوية" (Strong) if there is high technical confluence (e.g., MACD crossover/momentum + RSI in ideal zone + Price above SMA 20).
+        - "متوسطة" (Medium) if there is only partial confluence (e.g., MACD cross + RSI ideal, but price action is slightly weak or facing resistance).
+
         Provide your analysis in the exact JSON format below. DO NOT output any markdown, only valid JSON.
 
         {{
@@ -161,7 +166,8 @@ class GroqAnalyst:
             "take_profit": number,
             "stop_loss": number,
             "reasoning_ar": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة",
-            "timeframe": "يومي" | "أسبوعي" | "شهري" | "استثمار سنوي"
+            "timeframe": "يومي" | "أسبوعي" | "شهري" | "استثمار سنوي",
+            "signal_strength": "قوية" | "متوسطة"
         }}
         """
         return prompt
@@ -219,6 +225,16 @@ class GroqAnalyst:
                         analysis["risk"] = "Medium"
                     if "timeframe" not in analysis:
                         analysis["timeframe"] = "يومي"
+
+                    if "signal_strength" not in analysis:
+                        analysis["signal_strength"] = "متوسطة"
+                    else:
+                        strength_val = str(analysis["signal_strength"]).strip()
+                        if strength_val not in ["قوية", "متوسطة"]:
+                            if "قو" in strength_val:
+                                analysis["signal_strength"] = "قوية"
+                            else:
+                                analysis["signal_strength"] = "متوسطة"
 
                     signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
                     analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")

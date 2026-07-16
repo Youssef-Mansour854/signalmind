@@ -133,6 +133,7 @@ async def main_async():
             ai_analysis_result = None
             signal_type = None
             currency = None
+            signal_strength = None
             
             # Extra variables to prevent any possible leakage
             stock_data = None
@@ -250,6 +251,7 @@ async def main_async():
                 ai_risk = analysis.get('risk', 'Medium')
                 explanation_arabic = analysis.get('explanation_arabic', '')
                 timeframe = analysis.get('timeframe', 'يومي')
+                signal_strength = analysis.get('signal_strength', 'متوسطة')
                 ai_analysis_result = analysis
 
                 # Score the signal using the ranking engine
@@ -290,6 +292,7 @@ async def main_async():
                     "scoreMetrics": scores,
                     "currency": currency,
                     "timeframe": timeframe,
+                    "signalStrength": signal_strength,
                     "createdAt": now,
                     "updatedAt": now
                 }

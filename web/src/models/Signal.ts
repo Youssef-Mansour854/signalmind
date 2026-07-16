@@ -58,6 +58,7 @@ export interface ISignal extends Document {
   createdAt: Date;
   updatedAt: Date;
   timeframe?: string;
+  signalStrength?: 'قوية' | 'متوسطة';
 }
 
 const SignalSchema = new Schema<ISignal>(
@@ -110,7 +111,8 @@ const SignalSchema = new Schema<ISignal>(
       totalScore: { type: Number, default: 0, index: true },
       rank: { type: Number, default: 999 }
     },
-    timeframe: { type: String }
+    timeframe: { type: String },
+    signalStrength: { type: String }
   },
   { timestamps: true }
 );
