@@ -73,6 +73,11 @@ class AsyncTradeTracker:
                 continue
             symbol = trade["symbol"]
             
+            # Reset variables to prevent any possible price bleed from previous iterations
+            current_price = None
+            high_price = None
+            low_price = None
+            
             # Fetch parameters from corresponding signal document
             signal_id = trade.get("signalId")
             signal_doc = None

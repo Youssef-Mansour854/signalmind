@@ -19,187 +19,6 @@ from price_updater import run_price_update
 # Load env variables at startup
 load_dotenv()
 
-async def process_single_stock(symbol: str, index: int, total_stocks: int, session: aiohttp.ClientSession, analyzer, groq, telegram, ranking_engine, signals_col, now, groq_lock=None):
-    print(f"[{index}/{total_stocks}] Analyzing {symbol}...")
-    try:
-        # Determine market
-        market = "EGX" if symbol.endswith(".CA") else "US"
-
-        # 1. Fetch & Analyze Data (run in thread to prevent blocking event loop)
-        try:
-            stock_data = await asyncio.to_thread(analyzer.analyze_stock, symbol)
-        except Exception as e:
-            print(f"Failed to fetch or analyze data for {symbol}: {e}")
-            return {"status": "failed", "symbol": symbol}
-
-        if stock_data is None:
-            print(f"Skipped {symbol}: In a macro downtrend.")
-            return {"status": "skipped", "symbol": symbol}
-
-        # 2. Get AI Analysis
-        analysis = None
-        retries = 3
-        for attempt in range(retries):
-            try:
-                if groq_lock:
-                    async with groq_lock:
-                        try:
-                            analysis = await groq.analyze(stock_data, session)
-                            await asyncio.sleep(4.0)
-                        except Exception as inner_e:
-                            if "429" in str(inner_e):
-                                print(f"[INFO] Groq 429 rate limit hit for {symbol}. Cooling down for 15.0s inside lock...")
-                                await asyncio.sleep(15.0)
-                            raise inner_e
-                else:
-                    analysis = await groq.analyze(stock_data, session)
-                    await asyncio.sleep(4.0)
-                break
-            except Exception as e:
-                if "429" in str(e) and attempt < retries - 1:
-                    print(f"[INFO] Retrying {symbol} (attempt {attempt+1}/{retries})...")
-                else:
-                    raise e
-        
-        if not analysis:
-            print(f"Failed to get AI analysis for {symbol}.")
-            return {"status": "failed", "symbol": symbol}
-
-        # Server-side validation for realistic entry price
-        if 'entry_price' in analysis:
-            try:
-                ai_entry = float(analysis['entry_price'])
-            except (TypeError, ValueError):
-                ai_entry = 0
-            close_price = float(stock_data.get('close', 0))
-            if ai_entry >= close_price * 0.99:
-                entry_price_val = round(close_price * 0.985, 2)
-                analysis['entry_price'] = entry_price_val
-                
-                try:
-                    ai_sl = float(analysis.get('stop_loss', 0))
-                except (TypeError, ValueError):
-                    ai_sl = 0
-                if ai_sl >= entry_price_val:
-                    ai_sl = round(entry_price_val * 0.96, 2)
-                    analysis['stop_loss'] = ai_sl
-                    
-                try:
-                    ai_tp = float(analysis.get('take_profit', 0))
-                except (TypeError, ValueError):
-                    ai_tp = 0
-                if ai_tp <= entry_price_val:
-                    risk = entry_price_val - ai_sl
-                    analysis['take_profit'] = round(entry_price_val + (risk * 1.5), 2)
-
-        # Structure indicators for DB model
-        db_indicators = {
-            "close": stock_data.get("close"),
-            "rsi": stock_data.get("rsi"),
-            "macdLine": stock_data.get("macd_line"),
-            "macdSignal": stock_data.get("macd_signal"),
-            "sma20": stock_data.get("sma_20"),
-            "sma50": stock_data.get("sma_50"),
-            "ema20": stock_data.get("ema_20"),
-            "ema50": stock_data.get("ema_50"),
-            "ema200": stock_data.get("ema_200"),
-            "support": stock_data.get("support"),
-            "resistance": stock_data.get("resistance"),
-            "bbHigh": stock_data.get("bb_high"),
-            "bbLow": stock_data.get("bb_low"),
-            "bbMid": stock_data.get("bb_mid"),
-            "stochRsiK": stock_data.get("stoch_rsi_k"),
-            "stochRsiD": stock_data.get("stoch_rsi_d"),
-            "volume": stock_data.get("volume"),
-            "volumeAvg": stock_data.get("volume_avg")
-        }
-
-        signal_type = analysis.get('signal', 'HOLD')
-        entry_price = float(analysis.get('entry_price', stock_data.get('close', 0)))
-        take_profit = float(analysis.get('take_profit', 0))
-        stop_loss = float(analysis.get('stop_loss', 0))
-        ai_confidence = analysis.get('confidence', 'Medium')
-        ai_risk = analysis.get('risk', 'Medium')
-        explanation_arabic = analysis.get('explanation_arabic', '')
-
-        # Score the signal using the ranking engine
-        scores = ranking_engine.score_signal(
-            entry=entry_price,
-            tp=take_profit,
-            sl=stop_loss,
-            close=stock_data.get("close", 0),
-            indicators=db_indicators,
-            ai_confidence=ai_confidence
-        )
-
-        # Determine status and initial activation
-        status = "Expired"
-        if signal_type == "BUY":
-            current_price = float(stock_data.get("close", 0))
-            if current_price <= entry_price * 1.03:
-                status = "Active"
-            else:
-                status = "Pending"
-
-        # DB Document
-        signal_doc = {
-            "symbol": symbol,
-            "market": market,
-            "signalType": signal_type,
-            "entryPrice": entry_price,
-            "stopLoss": stop_loss,
-            "takeProfit": take_profit,
-            "currentPrice": float(stock_data.get("close", 0)),
-            "maxPriceReached": float(stock_data.get("close", 0)),
-            "status": status,
-            "isNearTP": False,
-            "indicators": db_indicators,
-            "aiConfidence": ai_confidence,
-            "aiRisk": ai_risk,
-            "explanationArabic": explanation_arabic,
-            "scoreMetrics": scores,
-            "createdAt": now,
-            "updatedAt": now
-        }
-
-        if status == "Active":
-            signal_doc["activatedAt"] = now
-
-        # Save to MongoDB via Upsert based on symbol (run in thread)
-        res = await asyncio.to_thread(
-            signals_col.update_one,
-            {"symbol": symbol},
-            {"$set": signal_doc},
-            upsert=True
-        )
-        upserted_id = res.upserted_id
-        if not upserted_id:
-            existing_doc = await asyncio.to_thread(signals_col.find_one, {"symbol": symbol}, {"_id": 1})
-            inserted_id = existing_doc["_id"] if existing_doc else None
-        else:
-            inserted_id = upserted_id
-        
-        if signal_type == 'BUY':
-            # Send Telegram alert for BUY signals (run in thread)
-            message = telegram.format_message(stock_data, analysis)
-            success = await asyncio.to_thread(telegram.send_message, message)
-            if not success:
-                print(f"Failed to send Telegram message for {symbol}.")
-            else:
-                print(f"BUY signal sent to Telegram for {symbol}.")
-            return {"status": "success", "symbol": symbol, "is_buy": True, "inserted_id": inserted_id}
-        else:
-            print(f"{symbol}: {signal_type} - saved to DB (skipped Telegram).")
-            return {"status": "success", "symbol": symbol, "is_buy": False}
-
-    except Exception as e:
-        err_msg = str(e)
-        if "429" in err_msg:
-            print(f"[WARNING] Groq rate limit hit for {symbol}. Skipping...")
-        else:
-            print(f"Unexpected error processing {symbol}: {e}")
-        return {"status": "failed", "symbol": symbol}
-
 async def main_async():
     try:
         config.validate_config()
@@ -298,39 +117,225 @@ async def main_async():
             sys.exit(0)
 
     total_stocks = len(stocks_to_analyze)
-    # Concurrency limiter
-    semaphore = asyncio.Semaphore(1)
     groq_lock = asyncio.Lock()
 
     print(f"Planning to analyze {total_stocks} stocks sequentially...")
-    
-    async def worker(symbol, index, session):
-        async with semaphore:
-            return await process_single_stock(
-                symbol=symbol,
-                index=index,
-                total_stocks=total_stocks,
-                session=session,
-                analyzer=analyzer,
-                groq=groq,
-                telegram=telegram,
-                ranking_engine=ranking_engine,
-                signals_col=signals_col,
-                now=now,
-                groq_lock=groq_lock
-            )
 
     results = []
     async with aiohttp.ClientSession() as session:
-        tasks = []
         for i, symbol in enumerate(stocks_to_analyze):
-            # Sleep 2.0s between spawning tasks to pace requests
-            if i > 0:
-                await asyncio.sleep(2.0)
-            task = asyncio.create_task(worker(symbol, i + 1, session))
-            tasks.append(task)
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            index = i + 1
+            print(f"[{index}/{total_stocks}] Analyzing {symbol}...")
+
+            # 1. Strict Variable Reset
+            current_price = None
+            entry_price = None
+            stop_loss = None
+            take_profit = None
+            ai_analysis_result = None
+            signal_type = None
+            currency = None
+            
+            # Extra variables to prevent any possible leakage
+            stock_data = None
+            analysis = None
+            db_indicators = None
+            scores = None
+            status = None
+            signal_doc = None
+            market = None
+
+            # 2. yfinance Validation & Fallback inside try...except block
+            try:
+                # Determine market and currency
+                market = "EGX" if symbol.endswith(".CA") else "US"
+                currency = "EGP" if market == "EGX" else "USD"
+
+                # Fetch stock data using analyzer
+                df_raw = await asyncio.to_thread(analyzer.fetch_data, symbol)
+                
+                # Check if data is empty (rate limits or invalid symbol)
+                if df_raw is None or df_raw.empty:
+                    print(f"[ERROR] Skipping {symbol}: No data or error occurred.")
+                    results.append({"status": "failed", "symbol": symbol})
+                    continue
+
+                # Calculate indicators
+                df_indicators = await asyncio.to_thread(analyzer.calculate_indicators, df_raw)
+                
+                # Extract latest state of indicators
+                stock_data = analyzer.get_latest_data(df_indicators)
+                stock_data['symbol'] = symbol
+
+                # Macro trend filter
+                if analyzer.is_in_macro_downtrend(stock_data):
+                    print(f"Skipped {symbol}: In a macro downtrend.")
+                    results.append({"status": "skipped", "symbol": symbol})
+                    continue
+
+                # 3. Get AI Analysis
+                retries = 3
+                for attempt in range(retries):
+                    try:
+                        async with groq_lock:
+                            analysis = await groq.analyze(stock_data, session)
+                            # Pacing inside lock to avoid rate limits
+                            await asyncio.sleep(4.0)
+                        break
+                    except Exception as inner_e:
+                        if "429" in str(inner_e) and attempt < retries - 1:
+                            print(f"[INFO] Groq 429 rate limit hit for {symbol}. Cooling down for 15.0s inside lock...")
+                            await asyncio.sleep(15.0)
+                            print(f"[INFO] Retrying {symbol} (attempt {attempt+2}/{retries})...")
+                        else:
+                            raise inner_e
+
+                if not analysis:
+                    print(f"Failed to get AI analysis for {symbol}.")
+                    results.append({"status": "failed", "symbol": symbol})
+                    continue
+
+                # Server-side validation for realistic entry price
+                if 'entry_price' in analysis:
+                    try:
+                        ai_entry = float(analysis['entry_price'])
+                    except (TypeError, ValueError):
+                        ai_entry = 0
+                    close_price = float(stock_data.get('close', 0))
+                    if ai_entry >= close_price * 0.99:
+                        entry_price_val = round(close_price * 0.985, 2)
+                        analysis['entry_price'] = entry_price_val
+                        
+                        try:
+                            ai_sl = float(analysis.get('stop_loss', 0))
+                        except (TypeError, ValueError):
+                            ai_sl = 0
+                        if ai_sl >= entry_price_val:
+                            ai_sl = round(entry_price_val * 0.96, 2)
+                            analysis['stop_loss'] = ai_sl
+                            
+                        try:
+                            ai_tp = float(analysis.get('take_profit', 0))
+                        except (TypeError, ValueError):
+                            ai_tp = 0
+                        if ai_tp <= entry_price_val:
+                            risk = entry_price_val - ai_sl
+                            analysis['take_profit'] = round(entry_price_val + (risk * 1.5), 2)
+
+                # Structure indicators for DB model
+                db_indicators = {
+                    "close": stock_data.get("close"),
+                    "rsi": stock_data.get("rsi"),
+                    "macdLine": stock_data.get("macd_line"),
+                    "macdSignal": stock_data.get("macd_signal"),
+                    "sma20": stock_data.get("sma_20"),
+                    "sma50": stock_data.get("sma_50"),
+                    "ema20": stock_data.get("ema_20"),
+                    "ema50": stock_data.get("ema_50"),
+                    "ema200": stock_data.get("ema_200"),
+                    "support": stock_data.get("support"),
+                    "resistance": stock_data.get("resistance"),
+                    "bbHigh": stock_data.get("bb_high"),
+                    "bbLow": stock_data.get("bb_low"),
+                    "bbMid": stock_data.get("bb_mid"),
+                    "stochRsiK": stock_data.get("stoch_rsi_k"),
+                    "stochRsiD": stock_data.get("stoch_rsi_d"),
+                    "volume": stock_data.get("volume"),
+                    "volumeAvg": stock_data.get("volume_avg")
+                }
+
+                signal_type = analysis.get('signal', 'HOLD')
+                entry_price = float(analysis.get('entry_price', stock_data.get('close', 0)))
+                take_profit = float(analysis.get('take_profit', 0))
+                stop_loss = float(analysis.get('stop_loss', 0))
+                ai_confidence = analysis.get('confidence', 'Medium')
+                ai_risk = analysis.get('risk', 'Medium')
+                explanation_arabic = analysis.get('explanation_arabic', '')
+                ai_analysis_result = analysis
+
+                # Score the signal using the ranking engine
+                scores = ranking_engine.score_signal(
+                    entry=entry_price,
+                    tp=take_profit,
+                    sl=stop_loss,
+                    close=stock_data.get("close", 0),
+                    indicators=db_indicators,
+                    ai_confidence=ai_confidence
+                )
+
+                # Determine status and initial activation
+                status = "Expired"
+                if signal_type == "BUY":
+                    current_price = float(stock_data.get("close", 0))
+                    if current_price <= entry_price * 1.03:
+                        status = "Active"
+                    else:
+                        status = "Pending"
+
+                # DB Document
+                signal_doc = {
+                    "symbol": symbol,
+                    "market": market,
+                    "signalType": signal_type,
+                    "entryPrice": entry_price,
+                    "stopLoss": stop_loss,
+                    "takeProfit": take_profit,
+                    "currentPrice": float(stock_data.get("close", 0)),
+                    "maxPriceReached": float(stock_data.get("close", 0)),
+                    "status": status,
+                    "isNearTP": False,
+                    "indicators": db_indicators,
+                    "aiConfidence": ai_confidence,
+                    "aiRisk": ai_risk,
+                    "explanationArabic": explanation_arabic,
+                    "scoreMetrics": scores,
+                    "currency": currency,
+                    "createdAt": now,
+                    "updatedAt": now
+                }
+
+                if status == "Active":
+                    signal_doc["activatedAt"] = now
+
+                # Save to MongoDB via Upsert based on symbol
+                res = await asyncio.to_thread(
+                    signals_col.update_one,
+                    {"symbol": symbol},
+                    {"$set": signal_doc},
+                    upsert=True
+                )
+                upserted_id = res.upserted_id
+                if not upserted_id:
+                    existing_doc = await asyncio.to_thread(signals_col.find_one, {"symbol": symbol}, {"_id": 1})
+                    inserted_id = existing_doc["_id"] if existing_doc else None
+                else:
+                    inserted_id = upserted_id
+                
+                if signal_type == 'BUY':
+                    # Send Telegram alert for BUY signals
+                    message = telegram.format_message(stock_data, analysis)
+                    success = await asyncio.to_thread(telegram.send_message, message)
+                    if not success:
+                        print(f"Failed to send Telegram message for {symbol}.")
+                    else:
+                        print(f"BUY signal sent to Telegram for {symbol}.")
+                    results.append({"status": "success", "symbol": symbol, "is_buy": True, "inserted_id": inserted_id})
+                else:
+                    print(f"{symbol}: {signal_type} - saved to DB (skipped Telegram).")
+                    results.append({"status": "success", "symbol": symbol, "is_buy": False})
+
+            except Exception as e:
+                err_msg = str(e)
+                if "429" in err_msg:
+                    print(f"[WARNING] Groq rate limit hit for {symbol}. Skipping...")
+                else:
+                    print(f"[ERROR] Skipping {symbol}: No data or error occurred. Details: {e}")
+                results.append({"status": "failed", "symbol": symbol})
+                continue
+            
+            finally:
+                # Anti-Ban Delay (Rate Limiting) to prevent blocking IP
+                await asyncio.sleep(1.5)
 
     failed_stocks = 0
     skipped_stocks = 0
