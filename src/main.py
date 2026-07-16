@@ -96,20 +96,18 @@ async def main_async():
             sys.exit(0)
 
     elif market_target == "EGX":
-        if is_egx_open(today_date):
-            stocks_to_analyze = config.EGX_STOCKS
-            print(f"[INFO] Running EGX-only analysis")
-        else:
-            print(f"[INFO] EGX market closed today. Skipping.")
-            holiday_msg = "🏖️ SignalMind\nEGX market closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
-            await asyncio.to_thread(telegram.send_message, holiday_msg)
-            sys.exit(0)
+        # Temporarily paused EGX market
+        print(f"[INFO] EGX market is temporarily paused. Skipping.")
+        holiday_msg = "🏖️ SignalMind\nEGX market is temporarily paused ✅"
+        await asyncio.to_thread(telegram.send_message, holiday_msg)
+        sys.exit(0)
 
     else:  # BOTH
         if is_us_open(today_date):
             stocks_to_analyze += config.US_STOCKS
-        if is_egx_open(today_date):
-            stocks_to_analyze += config.EGX_STOCKS
+        # Temporarily paused EGX market
+        # if is_egx_open(today_date):
+        #     stocks_to_analyze += config.EGX_STOCKS
         if not stocks_to_analyze:
             print(f"[INFO] Both markets closed today. Skipping.")
             holiday_msg = "🏖️ SignalMind\nBoth markets closed today (Holiday/Weekend)\nPrices updated for existing signals ✅"
@@ -251,6 +249,7 @@ async def main_async():
                 ai_confidence = analysis.get('confidence', 'Medium')
                 ai_risk = analysis.get('risk', 'Medium')
                 explanation_arabic = analysis.get('explanation_arabic', '')
+                timeframe = analysis.get('timeframe', 'يومي')
                 ai_analysis_result = analysis
 
                 # Score the signal using the ranking engine
@@ -290,6 +289,7 @@ async def main_async():
                     "explanationArabic": explanation_arabic,
                     "scoreMetrics": scores,
                     "currency": currency,
+                    "timeframe": timeframe,
                     "createdAt": now,
                     "updatedAt": now
                 }

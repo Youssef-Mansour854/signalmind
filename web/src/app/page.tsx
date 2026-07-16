@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 interface Trade {
   _id: string;
@@ -14,10 +16,7 @@ interface Trade {
   exitPrice?: number;
   exit_price?: number;
   status: 'Pending' | 'Active' | 'ACTIVE' | 'CLOSED_WIN' | 'CLOSED_LOSS' | 'Hit TP' | 'Hit SL' | 'Expired';
-  activatedAt?: string;
-  closedAt?: string;
-  closed_at?: string;
-  pnlPercentage?: number;
+  timeframe?: string;
   explanationArabic: string;
   createdAt: string;
   updatedAt: string;
@@ -58,31 +57,13 @@ interface AnalyticsData {
   };
 }
 
-interface HistoryItem {
-  _id: string;
-  symbol: string;
-  market: 'US' | 'EGX';
-  source: 'AI' | 'Actual';
-  entryPrice: number;
-  exitPrice: number;
-  exit_price?: number;
-  currentPrice?: number;
-  pnlPercentage: number;
-  cashPnL: number;
-  maxPeakPercentage: number;
-  holdingDuration: string;
-  status: string;
-  closedAt: string;
-  closed_at?: string;
-}
-
 export default function Dashboard() {
+  const pathname = usePathname();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   
-  const [marketFilter, setMarketFilter] = useState<'EGX' | 'US'>('EGX');
+  const [marketFilter, setMarketFilter] = useState<'EGX' | 'US'>('US');
   const [timeframe, setTimeframe] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('latest');
   const [loading, setLoading] = useState(true);
@@ -118,7 +99,7 @@ export default function Dashboard() {
       const json = await res.json();
       if (json.success) {
         setIsCloseModalOpen(false);
-        await Promise.all([fetchPortfolio(), fetchAnalytics(), fetchHistory()]); // Refresh all
+        await Promise.all([fetchPortfolio(), fetchAnalytics()]); // Refresh all
       } else {
         alert(json.error || 'فشلت عملية إغلاق الصفقة');
       }
@@ -165,21 +146,9 @@ export default function Dashboard() {
     }
   };
 
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch('/api/history');
-      const json = await res.json();
-      if (json.success) {
-        setHistory(json.data);
-      }
-    } catch (err) {
-      console.error('Error fetching history:', err);
-    }
-  };
-
   const fetchData = async () => {
     setLoading(true);
-    await Promise.all([fetchTrades(), fetchPortfolio(), fetchAnalytics(), fetchHistory()]);
+    await Promise.all([fetchTrades(), fetchPortfolio(), fetchAnalytics()]);
     setLoading(false);
   };
 
@@ -243,9 +212,6 @@ export default function Dashboard() {
   // Filter lists based on the selected market tab and status compatibility checks
   const rawActiveTrades = trades.filter(t => (t.status === 'ACTIVE' || t.status === 'Active' || t.status === 'Pending') && t.market === marketFilter);
   const activePortfolio = portfolio.filter(p => p.status === 'ACTIVE' && p.market === marketFilter);
-  const filteredHistory = history.filter(item => item.market === marketFilter);
-  const realizedWins = filteredHistory.filter(item => item.pnlPercentage > 0 || item.status === 'Hit TP');
-  const triggeredLosses = filteredHistory.filter(item => item.pnlPercentage < 0 || item.status === 'Hit SL');
 
   const totalPortfolioValue = activePortfolio.reduce((sum, item) => {
     const current = item.currentPrice || item.actualEntryPrice || 0;
@@ -277,6 +243,12 @@ export default function Dashboard() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
+  // Filter signals to only show pending/active signals from the last 48 hours
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const latestSignals = sortedActiveTrades.filter(trade => 
+    new Date(trade.createdAt) >= fortyEightHoursAgo
+  );
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'غير محدد';
     return new Date(dateStr).toLocaleDateString('ar-EG', {
@@ -295,21 +267,67 @@ export default function Dashboard() {
     return `$${formatted}`;
   };
 
+  const getTimeframeBadge = (timeframe?: string) => {
+    if (!timeframe) return null;
+    
+    let styles = "border-neutral-700 bg-neutral-900 text-neutral-300";
+    let weight = "font-medium";
+    
+    if (timeframe === "يومي") {
+      styles = "border-neutral-800 bg-neutral-950 text-neutral-400";
+      weight = "font-normal";
+    } else if (timeframe === "أسبوعي") {
+      styles = "border-neutral-700 bg-neutral-900/85 text-neutral-300";
+      weight = "font-medium";
+    } else if (timeframe === "شهري") {
+      styles = "border-neutral-600 bg-neutral-800 text-neutral-200";
+      weight = "font-bold";
+    } else if (timeframe === "استثمار سنوي") {
+      styles = "border-neutral-500 bg-neutral-700 text-white";
+      weight = "font-black tracking-wide";
+    }
+    
+    return (
+      <span className={`inline-block px-1.5 py-0.5 text-[9px] border rounded uppercase font-mono ${styles} ${weight}`}>
+        {timeframe}
+      </span>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-transparent text-neutral-100 font-sans antialiased" dir="rtl">
       {/* Header */}
       <header className="border-b border-neutral-900/50 py-5 sticky top-0 z-50 backdrop-blur-md bg-neutral-950/70">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-black tracking-tight uppercase">
-              <span className="bg-gradient-to-r from-indigo-300 via-indigo-200 to-emerald-300 bg-clip-text text-transparent">
-                محطة سيجنال مايند / SignalMind
-              </span>
-            </h1>
-            <p className="text-[10px] text-indigo-400/70 mt-1 font-mono uppercase tracking-wider">
-              التداول الخوارزمي الذكي والتحليل الإحصائي وإدارة المراكز
-            </p>
+          <div className="flex flex-col md:flex-row md:items-center gap-6">
+            <div>
+              <h1 className="text-xl font-black tracking-tight uppercase">
+                <span className="bg-gradient-to-r from-indigo-300 via-indigo-200 to-emerald-300 bg-clip-text text-transparent">
+                  محطة سيجنال مايند / SignalMind
+                </span>
+              </h1>
+              <p className="text-[10px] text-indigo-400/70 mt-1 font-mono uppercase tracking-wider">
+                التداول الخوارزمي الذكي والتحليل الإحصائي وإدارة المراكز
+              </p>
+            </div>
+
+            {/* Sleek monochrome navigation links */}
+            <nav className="flex items-center gap-4 text-xs font-bold font-sans">
+              <Link 
+                href="/" 
+                className={`transition-colors duration-250 py-1.5 px-3 rounded-md ${pathname === '/' ? 'text-white bg-neutral-900 border border-neutral-850' : 'text-neutral-400 hover:text-neutral-200'}`}
+              >
+                الرئيسية
+              </Link>
+              <Link 
+                href="/history" 
+                className={`transition-colors duration-250 py-1.5 px-3 rounded-md ${pathname === '/history' ? 'text-white bg-neutral-900 border border-neutral-850' : 'text-neutral-400 hover:text-neutral-200'}`}
+              >
+                سجل التوصيات
+              </Link>
+            </nav>
           </div>
+
           <div className="flex items-center gap-3">
             <button 
               onClick={fetchData}
@@ -425,7 +443,7 @@ export default function Dashboard() {
                 onClick={() => setMarketFilter('EGX')}
                 className={`px-6 py-1.5 text-xs font-bold transition-all duration-300 rounded-md cursor-pointer ${
                   marketFilter === 'EGX'
-                    ? 'bg-indigo-600/90 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                    ? 'bg-neutral-900 text-white shadow-sm border border-neutral-850'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/30'
                 }`}
               >
@@ -435,7 +453,7 @@ export default function Dashboard() {
                 onClick={() => setMarketFilter('US')}
                 className={`px-6 py-1.5 text-xs font-bold transition-all duration-300 rounded-md cursor-pointer ${
                   marketFilter === 'US'
-                    ? 'bg-indigo-600/90 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                    ? 'bg-neutral-900 text-white shadow-sm border border-neutral-850'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/30'
                 }`}
               >
@@ -495,11 +513,11 @@ export default function Dashboard() {
 
         {!loading && !error && (
           <>
-            {/* User Portfolio Section */}
+            {/* User Portfolio Section (Active Trades) */}
             <section className="space-y-4">
               <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
                 <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
-                  <span>[ محفظتي الفعلية ]</span>
+                  <span>[ محفظتي الفعلية / Active Trades ]</span>
                   <span className="text-xs text-neutral-500 font-normal">({activePortfolio.length})</span>
                 </h2>
               </div>
@@ -526,45 +544,45 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {activePortfolio.map(item => {
-                          const current = item.currentPrice || item.actualEntryPrice || 0;
-                          const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
-                          const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
-                          
-                          return (
-                            <tr key={item._id} className="hover:bg-neutral-900/40 transition-all duration-300">
-                              <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
-                              <td className="p-4 text-neutral-100 font-mono">{formatPrice(current, item.market, item.symbol)}</td>
-                              <td className="p-4 text-neutral-200 font-mono">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
-                              <td className={`p-4 font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {formatPrice(pnl, item.market, item.symbol)}{' '}
-                                <span dir="ltr" className="inline-block">
-                                  ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
-                                </span>
-                              </td>
-                              <td className="p-4">
-                                <span className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase font-mono">
-                                  ACTIVE
-                                </span>
-                              </td>
-                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(item.executedAt)}</td>
-                              <td className="p-4 text-center">
-                                <button
-                                  onClick={() => {
-                                    setSelectedPortfolioItem(item);
-                                    setExitPrice(current || item.actualEntryPrice);
-                                    setCloseReason('Manual Close');
-                                    setIsCloseModalOpen(true);
-                                  }}
-                                  className="px-3 py-1 text-[10px] border border-rose-900/60 hover:border-rose-600 transition-all duration-300 bg-rose-950/20 text-rose-300 hover:text-white font-bold rounded cursor-pointer"
-                                >
-                                  إغلاق الصفقة
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                         {activePortfolio.map(item => {
+                           const current = item.currentPrice || item.actualEntryPrice || 0;
+                           const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
+                           const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
+                           
+                           return (
+                             <tr key={item._id} className="hover:bg-neutral-900/40 transition-all duration-300">
+                               <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                               <td className="p-4 text-neutral-300 font-mono">{formatPrice(item.actualEntryPrice, item.market, item.symbol)}</td>
+                               <td className="p-4 text-neutral-100 font-mono">{formatPrice(current, item.market, item.symbol)}</td>
+                               <td className="p-4 text-neutral-200 font-mono">{formatPrice(item.positionSize, item.market, item.symbol)}</td>
+                               <td className={`p-4 font-bold font-mono ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                 {formatPrice(pnl, item.market, item.symbol)}{' '}
+                                 <span dir="ltr" className="inline-block">
+                                   ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                                 </span>
+                               </td>
+                               <td className="p-4">
+                                 <span className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-800 rounded uppercase font-mono">
+                                   ACTIVE
+                                 </span>
+                               </td>
+                               <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(item.executedAt)}</td>
+                               <td className="p-4 text-center">
+                                 <button
+                                   onClick={() => {
+                                     setSelectedPortfolioItem(item);
+                                     setExitPrice(current || item.actualEntryPrice);
+                                     setCloseReason('Manual Close');
+                                     setIsCloseModalOpen(true);
+                                   }}
+                                   className="px-3 py-1 text-[10px] border border-neutral-850 hover:border-neutral-700 transition-all duration-300 bg-neutral-900 text-neutral-300 hover:text-white font-bold rounded cursor-pointer"
+                                 >
+                                   إغلاق الصفقة
+                                 </button>
+                               </td>
+                             </tr>
+                           );
+                         })}
                       </tbody>
                     </table>
                   </div>
@@ -576,10 +594,10 @@ export default function Dashboard() {
                       const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
                       const pnlPct = item.pnlPercentage !== undefined ? item.pnlPercentage : (item.actualEntryPrice > 0 ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0);
                       return (
-                        <div key={item._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${pnl >= 0 ? 'glow-emerald' : 'glow-rose'}`}>
+                        <div key={item._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
-                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-450 border border-neutral-850 rounded uppercase font-mono">
+                            <span className="inline-block px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-neutral-400 border border-neutral-850 rounded uppercase font-mono">
                               ACTIVE
                             </span>
                           </div>
@@ -613,7 +631,7 @@ export default function Dashboard() {
                                 setCloseReason('Manual Close');
                                 setIsCloseModalOpen(true);
                               }}
-                              className="px-3 py-1 border border-rose-900/60 hover:border-rose-600 transition-all duration-300 bg-rose-950/20 text-rose-300 hover:text-white font-bold rounded cursor-pointer text-[10px]"
+                              className="px-3 py-1 border border-neutral-850 hover:border-neutral-700 transition-all duration-300 bg-neutral-900 text-neutral-350 hover:text-white font-bold rounded cursor-pointer text-[10px]"
                             >
                               إغلاق الصفقة
                             </button>
@@ -626,18 +644,18 @@ export default function Dashboard() {
               )}
             </section>
 
-            {/* 1. Active Positions Table */}
+            {/* Latest Signals Section (Pending/Active Last 48h) */}
             <section className="space-y-4">
               <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
                 <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
-                  <span>[ الصفقات النشطة ]</span>
-                  <span className="text-xs text-neutral-500 font-normal">({sortedActiveTrades.length})</span>
+                  <span>[ أحدث التوصيات - آخر 48 ساعة / Latest Signals ]</span>
+                  <span className="text-xs text-neutral-500 font-normal font-sans">({latestSignals.length})</span>
                 </h2>
               </div>
 
-              {sortedActiveTrades.length === 0 ? (
+              {latestSignals.length === 0 ? (
                 <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
-                  لا توجد صفقات نشطة حالياً في هذا السوق.
+                  لا توجد إشارات حديثة معلقة أو نشطة خلال الـ 48 ساعة الماضية.
                 </div>
               ) : (
                 <>
@@ -645,8 +663,8 @@ export default function Dashboard() {
                   <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
                     <table className="w-full border-collapse text-right text-xs">
                       <thead>
-                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                          <th className="p-4">السهم</th>
+                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold font-sans">
+                          <th className="p-4">السهم والمدى الزمني</th>
                           <th className="p-4">السعر الحالي</th>
                           <th className="p-4">سعر الدخول</th>
                           <th className="p-4">هدف الربح</th>
@@ -656,37 +674,40 @@ export default function Dashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {sortedActiveTrades.map(trade => {
+                        {latestSignals.map(trade => {
                           const isRiskFree = trade.stopLoss >= trade.entryPrice * 0.999;
-                          const isHighRRR = trade.rrr >= 2.0;
+                          const isHighRRR = (trade as any).rrr >= 2.0;
 
                           return (
                             <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
                               <td className="p-4 font-bold text-white tracking-wide">
-                                <div>{trade.symbol}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{trade.symbol}</span>
+                                  {getTimeframeBadge(trade.timeframe)}
+                                </div>
                                 <div className="text-[10px] text-neutral-500 mt-1 font-mono">
                                   عائد:{' '}
                                   <span dir="ltr" className="inline-block">
-                                    +{trade.expectedProfitPct.toFixed(1)}%
+                                    +{(trade as any).expectedProfitPct.toFixed(1)}%
                                   </span>{' '}
                                   | RRR:{' '}
-                                  <span dir="ltr" className={`inline-block ${isHighRRR ? 'text-amber-400 font-black tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]' : 'text-neutral-400'}`}>
-                                    {trade.rrr.toFixed(2)}
+                                  <span dir="ltr" className={`inline-block ${(trade as any).rrr >= 2.0 ? 'text-white font-black' : 'text-neutral-400'}`}>
+                                    {(trade as any).rrr.toFixed(2)}
                                   </span>
                                 </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                   {trade.status === 'Pending' && (
-                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-sans">
-                                      Pending
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-amber-500 border border-neutral-850 rounded font-sans">
+                                      معلق
                                     </span>
                                   )}
                                   {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-sans">
-                                      Active
+                                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-emerald-500 border border-neutral-850 rounded font-sans">
+                                      نشط
                                     </span>
                                   )}
                                   {isRiskFree && (
-                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 rounded-full font-mono animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.35)] inline-flex items-center gap-1">
+                                    <span className="px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-emerald-400 border border-neutral-800 rounded-full font-mono inline-flex items-center gap-1">
                                       🛡️ مؤمنة
                                     </span>
                                   )}
@@ -694,10 +715,10 @@ export default function Dashboard() {
                               </td>
                               <td className="p-4 text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</td>
                               <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
-                              <td className={`p-4 font-mono ${isRiskFree ? 'text-emerald-400 font-bold drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]' : 'text-rose-400/90'}`}>
+                              <td className="p-4 text-emerald-450 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</td>
+                              <td className={`p-4 font-mono ${isRiskFree ? 'text-emerald-400 font-bold' : 'text-rose-450'}`}>
                                 <div>{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</div>
-                                {isRiskFree && <span className="text-[9px] text-emerald-400/90 font-sans font-bold block">بدون مخاطرة 🛡️</span>}
+                                {isRiskFree && <span className="text-[9px] text-emerald-400/90 font-sans font-bold block">بدون مخاطرة</span>}
                               </td>
                               <td className="p-4 leading-relaxed text-neutral-300 font-light max-w-md whitespace-normal">
                                 {trade.explanationArabic}
@@ -710,7 +731,7 @@ export default function Dashboard() {
                                     setPositionSize('');
                                     setIsModalOpen(true);
                                   }}
-                                  className="px-3 py-1 text-[10px] border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer"
+                                  className="px-3 py-1.5 text-[10px] border border-neutral-800 hover:border-neutral-600 transition-all duration-300 bg-neutral-900 text-neutral-300 hover:text-white font-bold rounded cursor-pointer"
                                 >
                                   تنفيذ الصفقة
                                 </button>
@@ -724,35 +745,30 @@ export default function Dashboard() {
 
                   {/* Mobile View */}
                   <div className="md:hidden space-y-4">
-                    {sortedActiveTrades.map(trade => {
+                    {latestSignals.map(trade => {
                       const isRiskFree = trade.stopLoss >= trade.entryPrice * 0.999;
-                      const isHighRRR = trade.rrr >= 2.0;
+                      const isHighRRR = (trade as any).rrr >= 2.0;
 
                       return (
-                        <div key={trade._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${isRiskFree ? 'border-r-4 border-r-emerald-400 glow-emerald' : ((trade.status === 'Active' || trade.status === 'ACTIVE') ? 'glow-emerald' : 'glow-amber')}`}>
+                        <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale">
                           <div className="flex items-center justify-between">
-                            <div>
+                            <div className="flex items-center gap-2">
                               <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                              <span className="text-[9px] text-neutral-500 mr-2 font-mono" dir="ltr">
-                                +{trade.expectedProfitPct.toFixed(1)}% | R:{' '}
-                                <span className={isHighRRR ? 'text-amber-400 font-black' : 'text-neutral-400'}>
-                                  {trade.rrr.toFixed(1)}
-                                </span>
-                              </span>
+                              {getTimeframeBadge(trade.timeframe)}
                             </div>
                             <div className="flex items-center gap-1.5">
                               {trade.status === 'Pending' && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-950/40 text-amber-400 border border-amber-900/30 rounded font-mono font-bold">
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-amber-500 border border-neutral-850 rounded font-sans">
                                   معلق
                                 </span>
                               )}
                               {(trade.status === 'Active' || trade.status === 'ACTIVE') && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 rounded font-mono font-bold">
+                                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-900 text-emerald-500 border border-neutral-850 rounded font-sans">
                                   نشط
                                 </span>
                               )}
                               {isRiskFree && (
-                                <span className="px-2 py-0.5 text-[9px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50 rounded-full font-mono animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.3)]">
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-neutral-900 text-emerald-400 border border-neutral-800 rounded-full font-mono">
                                   🛡️ مؤمنة
                                 </span>
                               )}
@@ -769,13 +785,12 @@ export default function Dashboard() {
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">هدف الربح:</span>
-                              <span className="text-emerald-400/90 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
+                              <span className="text-emerald-450 font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
                             </div>
                             <div>
                               <span className="text-neutral-500 block text-[10px]">وقف الخسارة:</span>
-                              <span className={`font-mono ${isRiskFree ? 'text-emerald-400 font-bold' : 'text-rose-400/90'}`}>
+                              <span className={`font-mono ${isRiskFree ? 'text-emerald-400 font-bold' : 'text-rose-450'}`}>
                                 {formatPrice(trade.stopLoss, trade.market, trade.symbol)}
-                                {isRiskFree && <span className="text-[9px] block text-emerald-400/90 font-sans font-bold">بدون مخاطرة 🛡️</span>}
                               </span>
                             </div>
                           </div>
@@ -790,291 +805,10 @@ export default function Dashboard() {
                                 setPositionSize('');
                                 setIsModalOpen(true);
                               }}
-                              className="w-full py-2 border border-indigo-900/60 hover:border-indigo-500/60 transition-all duration-300 bg-indigo-950/20 text-indigo-300 hover:text-white font-bold rounded cursor-pointer text-[10px] text-center"
+                              className="w-full py-2 border border-neutral-800 hover:border-neutral-600 transition-all duration-300 bg-neutral-900 text-neutral-300 hover:text-white font-bold rounded cursor-pointer text-[10px] text-center"
                             >
                               تنفيذ الصفقة
                             </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* 2. Realized Profits Table */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
-                  <span>[ الأرباح المحققة ]</span>
-                  <span className="text-xs text-neutral-500 font-normal">({realizedWins.length})</span>
-                </h2>
-              </div>
-
-              {realizedWins.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
-                  لا توجد صفقات رابحة مغلقة في هذا السوق بعد.
-                </div>
-              ) : (
-                <>
-                  {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
-                    <table className="w-full border-collapse text-right text-xs">
-                      <thead>
-                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                          <th className="p-4">الرمز</th>
-                          <th className="p-4">سعر الدخول</th>
-                          <th className="p-4">سعر الخروج</th>
-                          <th className="p-4">نسبة العائد (%)</th>
-                          <th className="p-4 text-left">تاريخ الإغلاق</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {realizedWins.map(trade => {
-                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
-                          return (
-                            <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
-                              <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 text-emerald-450 font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 font-mono">
-                                <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded">
-                                  +{trade.pnlPercentage || 0}%
-                                </span>
-                              </td>
-                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(trade.closedAt || trade.closed_at)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile View */}
-                  <div className="md:hidden space-y-4">
-                    {realizedWins.map(trade => {
-                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
-                      return (
-                        <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-emerald">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 rounded font-mono">
-                              +{trade.pnlPercentage || 0}%
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                              <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
-                              <span className="text-emerald-400 font-bold font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
-                            تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* 3. Triggered Stops Table */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
-                  <span>[ الصفقات المغلقة على خسارة ]</span>
-                  <span className="text-xs text-neutral-500 font-normal">({triggeredLosses.length})</span>
-                </h2>
-              </div>
-
-              {triggeredLosses.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
-                  لا توجد صفقات خاسرة مغلقة في هذا السوق بعد.
-                </div>
-              ) : (
-                <>
-                  {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
-                    <table className="w-full border-collapse text-right text-xs">
-                      <thead>
-                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                          <th className="p-4">الرمز</th>
-                          <th className="p-4">سعر الدخول</th>
-                          <th className="p-4">سعر الخروج</th>
-                          <th className="p-4">نسبة العائد (%)</th>
-                          <th className="p-4 text-left">تاريخ الإغلاق</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {triggeredLosses.map(trade => {
-                          const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
-                          return (
-                            <tr key={trade._id} className="hover:bg-neutral-900/40 transition-all duration-300">
-                              <td className="p-4 font-bold text-white tracking-wide">{trade.symbol}</td>
-                              <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 text-rose-400 font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</td>
-                              <td className="p-4 font-mono">
-                                <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded">
-                                  {trade.pnlPercentage || 0}%
-                                </span>
-                              </td>
-                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(trade.closedAt || trade.closed_at)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile View */}
-                  <div className="md:hidden space-y-4">
-                    {triggeredLosses.map(trade => {
-                      const exitPrice = trade.exitPrice || trade.exit_price || trade.currentPrice || 0;
-                      return (
-                        <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right hover-scale glow-rose">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
-                            <span dir="ltr" className="inline-block px-2.5 py-0.5 text-[9px] font-bold bg-rose-950/30 text-rose-400 border border-rose-900/40 rounded font-mono">
-                              {trade.pnlPercentage || 0}%
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                              <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">سعر الخروج:</span>
-                              <span className="text-rose-400 font-bold font-mono">{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
-                            تاريخ الإغلاق: {formatDate(trade.closedAt || trade.closed_at)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* 4. Closed Trades History Table */}
-            <section className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-900/50 pb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider font-mono text-indigo-400 flex items-center gap-2">
-                  <span>[ سجل الصفقات المغلقة ]</span>
-                  <span className="text-xs text-neutral-500 font-normal">({filteredHistory.length})</span>
-                </h2>
-              </div>
-
-              {filteredHistory.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded-lg bg-neutral-950/20">
-                  لا توجد صفقات مغلقة في هذا السوق بعد.
-                </div>
-              ) : (
-                <>
-                  {/* Desktop View */}
-                  <div className="hidden md:block overflow-x-auto glass-card rounded-lg">
-                    <table className="w-full border-collapse text-right text-xs">
-                      <thead>
-                        <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold">
-                          <th className="p-4 text-right">السهم</th>
-                          <th className="p-4 text-right">المحفظة</th>
-                          <th className="p-4 text-right">مدة الاحتفاظ</th>
-                          <th className="p-4 text-right">سعر الدخول ➔ الإغلاق</th>
-                          <th className="p-4 text-right">الربح النقدي</th>
-                          <th className="p-4 text-right">العائد %</th>
-                          <th className="p-4 text-right">أقصى صعود</th>
-                          <th className="p-4 text-left">تاريخ الإغلاق</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                        {filteredHistory.map(item => {
-                          const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
-                          const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
-                          return (
-                            <tr key={item._id} className="hover:bg-neutral-900/40 transition-all duration-300">
-                              <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
-                              <td className="p-4 text-neutral-300">
-                                {item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}
-                              </td>
-                              <td className="p-4 text-neutral-400 font-mono">{item.holdingDuration}</td>
-                              <td className="p-4 text-neutral-300 font-mono" dir="ltr">
-                                {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
-                              </td>
-                              <td className="p-4 font-bold font-mono">
-                                <span dir="ltr" className={`inline-block ${cashPnlColor}`}>
-                                  {item.cashPnL > 0 ? '+' : ''}{formatPrice(item.cashPnL, item.market, item.symbol)}
-                                </span>
-                              </td>
-                              <td className="p-4 font-bold">
-                                <span dir="ltr" className={`inline-block ${pnlColor}`}>
-                                  {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="p-4 font-bold font-mono text-emerald-400/90">
-                                <span dir="ltr" className="inline-block">
-                                  +{item.maxPeakPercentage.toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(item.closedAt)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile View */}
-                  <div className="md:hidden space-y-4">
-                    {filteredHistory.map(item => {
-                      const pnlColor = item.pnlPercentage > 0 ? 'text-green-500' : (item.pnlPercentage < 0 ? 'text-red-500' : 'text-neutral-450');
-                      const cashPnlColor = item.cashPnL > 0 ? 'text-green-500' : (item.cashPnL < 0 ? 'text-red-500' : 'text-neutral-450');
-                      return (
-                        <div key={item._id} className={`glass-card p-4 rounded-lg space-y-3 text-right hover-scale ${item.pnlPercentage > 0 ? 'glow-emerald' : 'glow-rose'}`}>
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-white tracking-wide text-sm">{item.symbol}</span>
-                            <span className="text-[10px] text-neutral-450 font-mono">الاحتفاظ: {item.holdingDuration}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">المحفظة:</span>
-                              <span className="text-neutral-300">{item.source === 'AI' ? 'افتراضي AI' : 'فعلي Actual'}</span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">السعر:</span>
-                              <span className="text-neutral-300 font-mono text-[10px]" dir="ltr">
-                                {formatPrice(item.entryPrice, item.market, item.symbol)} ➔ {formatPrice(item.exitPrice, item.market, item.symbol)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">الربح النقدي:</span>
-                              <span dir="ltr" className={`font-bold font-mono ${cashPnlColor}`}>
-                                {item.cashPnL > 0 ? '+' : ''}{formatPrice(item.cashPnL, item.market, item.symbol)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">العائد %:</span>
-                              <span dir="ltr" className={`font-bold ${pnlColor}`}>
-                                {item.pnlPercentage > 0 ? '+' : ''}{item.pnlPercentage.toFixed(2)}%
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-500 block text-[10px]">أقصى صعود:</span>
-                              <span dir="ltr" className="font-bold font-mono text-emerald-400/90">
-                                +{item.maxPeakPercentage.toFixed(2)}%
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-[10px] text-neutral-500 border-t border-neutral-900/50 pt-2 text-left font-mono">
-                            تاريخ الإغلاق: {formatDate(item.closedAt)}
                           </div>
                         </div>
                       );
@@ -1132,7 +866,7 @@ export default function Dashboard() {
               <div className="flex gap-3 pt-2">
                 <button 
                   type="submit" 
-                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer shadow-[0_0_15px_rgba(99,102,241,0.2)]"
+                  className="flex-1 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer"
                 >
                   تأكيد التنفيذ
                 </button>
@@ -1195,7 +929,7 @@ export default function Dashboard() {
               <div className="flex gap-3 pt-2">
                 <button 
                   type="submit" 
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer"
+                  className="flex-1 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white font-bold tracking-wider rounded-md uppercase text-center transition cursor-pointer"
                 >
                   تأكيد الإغلاق
                 </button>

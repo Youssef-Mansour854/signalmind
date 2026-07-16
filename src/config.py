@@ -14,42 +14,26 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # Stock Lists (Sharia-Compliant Only)
 US_STOCKS: List[str] = [
-    # Technology
-    "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AMD", "INTC", "CRM", "ADBE", "ORCL", "QCOM", "AVGO", "ASML",
-    "CSCO", "INTU", "AMAT", "LRCX", "PANW", "NOW", "KLAC",
-    # Automotive / EV
-    "TSLA",
-    # Healthcare & Biotech
-    "LLY", "JNJ", "PFE", "ABBV", "MRK", "TMO", "ABT", "AMGN", "GILD", "ISRG", "REGN", "VRTX",
-    # Consumer & Retail
-    "AMZN", "PG", "KO", "PEP", "WMT", "COST", "NKE", "HD", "LOW", "TJX", "TGT",
-    # Industrial, Materials & Energy
-    "HON", "GE", "CAT", "BA", "XOM", "CVX", "COP", "SLB", "DE"
+    # Curated 150 Shariah-compliant US stocks
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA", "LLY", "AVGO",
+    "JNJ", "PG", "MRK", "ABBV", "ADBE", "CRM", "AMD", "TMO", "ABT", "AMGN",
+    "PEP", "COST", "KO", "NKE", "CSCO", "WMT", "CVX", "XOM", "ORCL", "HD",
+    "LOW", "TJX", "TGT", "HON", "GE", "CAT", "COP", "SLB", "DE", "INTU",
+    "QCOM", "TXN", "AMAT", "MU", "LRCX", "NOW", "PANW", "KLAC", "SNPS", "CDNS",
+    "FTNT", "ANET", "ADSK", "MCHP", "MPWR", "ON", "NXPI", "MRVL", "ASML", "ISRG",
+    "GILD", "REGN", "VRTX", "BMY", "MDT", "CVS", "CI", "BDX", "MCK", "HCA",
+    "BSX", "DHR", "SYK", "ZBH", "EW", "ALGN", "DXCM", "PODD", "MTD", "ILMN",
+    "EL", "CL", "KMB", "LULU", "DECK", "CROX", "EOG", "MPC", "PSX", "VLO",
+    "OXY", "HAL", "BKR", "HES", "FANG", "UNP", "UPS", "FDX", "NSC", "CSX",
+    "WM", "RSG", "EMR", "ITW", "ETN", "PH", "ROP", "FAST", "GWW", "APD",
+    "ECL", "SHW", "FCX", "NEM", "CTVA", "DD", "ALB", "FMC", "NUE", "RMD",
+    "BIIB", "TECH", "IQV", "WST", "STE", "ZTS", "IDXX", "ORLY", "AZO", "TSCO",
+    "ULTA", "ROST", "DLTR", "DG", "YUM", "SBUX", "CMG", "DRI", "MAR", "H",
+    "EXPE", "BKNG", "RCL", "NCLH", "CCL", "WDC", "STX", "HPQ", "HPE", "NTAP"
 ]
-EGX_STOCKS: List[str] = [
-    "TMGH.CA",  # طلعت مصطفى
-    "PHDC.CA",  # بالم هيلز
-    "OCDI.CA",  # سوديك
-    "MASR.CA",  # مدينة مصر للإسكان
-    "ORHD.CA",  # أوراسكوم للتنمية
-    "ADIB.CA",  # مصرف أبوظبي الإسلامي
-    "FAIT.CA",  # بنك فيصل الإسلامي
-    "SAUD.CA",  # بنك البركة مصر
-    "EFIH.CA",  # إي فاينانس
-    "ETEL.CA",  # المصرية للاتصالات
-    "JUFO.CA",  # جهينة
-    "EFID.CA",  # إيديتا
-    "OLFI.CA",  # عبور لاند
-    "ISPH.CA",  # ابن سينا فارما
-    "RMDA.CA",  # راميدا للأدوية
-    "AMOC.CA",  # أموك
-    "SKPC.CA",  # سيدي كرير للبتروكيماويات
-    "EGAL.CA",  # مصر للألومنيوم
-    "ORAS.CA",  # أوراسكوم كونستراكشون
-    "ORWE.CA",  # النساجون الشرقيون
-    "EGAS.CA",  # غاز مصر
-    "MTIE.CA"   # إم إم جروب
-]
+
+# Temporarily paused EGX market
+EGX_STOCKS: List[str] = []
 
 # Analysis Parameters
 INDICATOR_PARAMS = {

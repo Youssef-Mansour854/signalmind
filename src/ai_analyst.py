@@ -146,6 +146,13 @@ class GroqAnalyst:
         take_profit should give minimum 1.5x Risk-Reward Ratio
         Formula: take_profit = entry + (entry - stop_loss) * 1.5
 
+        TIMEFRAME RULES:
+        Classify the trade setup timeframe as ONE of the following based on the chart's technical nature:
+        - "يومي" (Daily) for short-term setups (few days to a couple of weeks)
+        - "أسبوعي" (Weekly) for medium-term setups (few weeks to a couple of months)
+        - "شهري" (Monthly) for long-term setups (few months to a year)
+        - "استثمار سنوي" (Annual Investment) for long-term fundamental/investing setups (more than a year)
+
         Provide your analysis in the exact JSON format below. DO NOT output any markdown, only valid JSON.
 
         {{
@@ -153,7 +160,8 @@ class GroqAnalyst:
             "entry_price": number,
             "take_profit": number,
             "stop_loss": number,
-            "reasoning_ar": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة"
+            "reasoning_ar": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة",
+            "timeframe": "يومي" | "أسبوعي" | "شهري" | "استثمار سنوي"
         }}
         """
         return prompt
@@ -209,6 +217,8 @@ class GroqAnalyst:
                         analysis["confidence"] = "Medium"
                     if "risk" not in analysis:
                         analysis["risk"] = "Medium"
+                    if "timeframe" not in analysis:
+                        analysis["timeframe"] = "يومي"
 
                     signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
                     analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
