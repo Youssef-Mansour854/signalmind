@@ -52,8 +52,10 @@ interface StockTerminalProps {
   initialPortfolioItem: PortfolioItem | null;
 }
 
-export default function StockTerminal({ signal, initialPortfolioItem }: StockTerminalProps) {
+export default function StockTerminal({ signal: initialSignal, initialPortfolioItem }: StockTerminalProps) {
+  const [signal, setSignal] = useState<Signal>(initialSignal);
   const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(initialPortfolioItem);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Execute Modal State
@@ -113,6 +115,33 @@ export default function StockTerminal({ signal, initialPortfolioItem }: StockTer
       // Component unmounted clean up
     };
   }, [signal.symbol, signal.market]);
+
+  const handleLiveScan = async () => {
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: signal.symbol,
+          market: signal.market,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.data) {
+        setSignal(json.data);
+        setActualEntryPrice(json.data.entryPrice);
+        setExitPrice(json.data.currentPrice);
+      } else {
+        alert(json.error || 'فشلت عملية تحديث التحليل اللحظي');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع أثناء التحليل');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleExecuteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -244,8 +273,26 @@ export default function StockTerminal({ signal, initialPortfolioItem }: StockTer
         </div>
 
         {/* AI Analysis Panel */}
-        <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-3 text-right">
-          <h3 className="text-xs font-black uppercase text-neutral-400 font-mono tracking-wider">[ التحليل الفني بالذكاء الاصطناعي ]</h3>
+        <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
+          <div className="flex items-center justify-between border-b border-neutral-900 pb-2 gap-4">
+            <h3 className="text-xs font-black uppercase text-neutral-400 font-mono tracking-wider">[ التحليل الفني بالذكاء الاصطناعي ]</h3>
+            <button
+              onClick={handleLiveScan}
+              disabled={isAnalyzing}
+              className="text-[9px] font-bold bg-white text-black hover:bg-neutral-200 px-2 py-1 rounded transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1"
+            >
+              {isAnalyzing ? (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />
+                  <span>جاري التحليل...</span>
+                </>
+              ) : (
+                <>
+                  <span>تحديث التحليل اللحظي ⚡</span>
+                </>
+              )}
+            </button>
+          </div>
           <p className="text-xs leading-relaxed text-neutral-300 font-light font-sans whitespace-pre-wrap">
             {signal.explanationArabic}
           </p>
