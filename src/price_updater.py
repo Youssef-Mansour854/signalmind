@@ -178,13 +178,19 @@ class SignalPriceUpdater:
                     tp_hits += 1
                 elif hit_sl:
                     exit_val = float(stop_loss)
-                    update_fields["status"] = "Hit SL"
+                    is_profitable = bool(entry_price > 0 and exit_val > entry_price)
+                    update_fields["status"] = "Hit TP" if is_profitable else "Hit SL"
                     update_fields["currentPrice"] = round(exit_val, 4)
                     update_fields["closedAt"] = now
                     if entry_price > 0:
                         update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
-                    print(f"[SL HIT] Signal {symbol} Hit SL! Low: {low_price:.2f} <= SL {stop_loss:.2f}")
-                    sl_hits += 1
+                    
+                    if is_profitable:
+                        print(f"[SL HIT -> TP BE] Signal {symbol} Hit TP (BE)! Low: {low_price:.2f} <= SL {stop_loss:.2f} (Profitable)")
+                        tp_hits += 1
+                    else:
+                        print(f"[SL HIT] Signal {symbol} Hit SL! Low: {low_price:.2f} <= SL {stop_loss:.2f}")
+                        sl_hits += 1
 
             # Update DB
             await asyncio.to_thread(signals_col.update_one, {"_id": sig["_id"]}, {"$set": update_fields})

@@ -162,20 +162,25 @@ class AsyncTradeTracker:
 
             elif hit_sl:
                 exit_val = float(stop_loss)
-                update_fields["status"] = "Hit SL"
+                is_profitable = bool(entry_price and exit_val > entry_price)
+                update_fields["status"] = "Hit TP" if is_profitable else "Hit SL"
                 update_fields["exitPrice"] = round(exit_val, 4)
                 update_fields["exit_price"] = round(exit_val, 4)
                 update_fields["closeDate"] = now
                 update_fields["closedAt"] = now
                 update_fields["closed_at"] = now
-                update_fields["closeReason"] = "SL Hit"
+                update_fields["closeReason"] = "TP Hit (BE)" if is_profitable else "SL Hit"
                 if entry_price:
                     update_fields["finalPnL"] = round((exit_val - entry_price) * quantity, 4)
                     update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
 
                 await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
-                print(f"[SL HIT] Closed LOSS for {symbol}: exit ${exit_val:.2f} <= SL ${stop_loss}")
-                closed_losses += 1
+                if is_profitable:
+                    print(f"[SL HIT -> TP BE] Closed WIN (BE) for {symbol}: exit ${exit_val:.2f} > Entry ${entry_price:.2f}")
+                    closed_wins += 1
+                else:
+                    print(f"[SL HIT] Closed LOSS for {symbol}: exit ${exit_val:.2f} <= SL ${stop_loss}")
+                    closed_losses += 1
 
             else:
                 # Keep active and update current price, currentPnL, and max price reached

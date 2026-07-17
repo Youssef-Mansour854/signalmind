@@ -80,11 +80,11 @@ class AIFeedbackLoop:
             return
 
         # 2. Segment and aggregate statistics
-        sig_wins = [t for t in closed_signals if t["status"] == "Hit TP"]
-        sig_losses = [t for t in closed_signals if t["status"] == "Hit SL"]
+        sig_wins = [t for t in closed_signals if t["status"] == "Hit TP" or (t["status"] == "Hit SL" and t.get("pnlPercentage", 0) > 0)]
+        sig_losses = [t for t in closed_signals if t["status"] == "Hit SL" and not (t.get("pnlPercentage", 0) > 0)]
 
-        port_wins = [t for t in closed_portfolio if t["status"] == "Hit TP" or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) > 0)]
-        port_losses = [t for t in closed_portfolio if t["status"] == "Hit SL" or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) <= 0)]
+        port_wins = [t for t in closed_portfolio if t["status"] == "Hit TP" or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) > 0) or (t["status"] == "Hit SL" and t.get("pnlPercentage", 0) > 0)]
+        port_losses = [t for t in closed_portfolio if (t["status"] == "Hit SL" and not (t.get("pnlPercentage", 0) > 0)) or (t["status"] == "CLOSED" and t.get("pnlPercentage", 0) <= 0)]
 
         win_count = len(sig_wins) + len(port_wins)
         loss_count = len(sig_losses) + len(port_losses)
