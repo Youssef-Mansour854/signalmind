@@ -68,13 +68,14 @@ export async function POST(request: Request) {
     });
     const latestMACD = macdValues[macdValues.length - 1] || { MACD: 0, signal: 0, histogram: 0 };
 
-    // 4. Groq SDK AI Call
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ success: false, error: 'GROQ_API_KEY غير معرف في خادم الويب.' }, { status: 500 });
+    // 4. Groq SDK AI Call with multi-key rotation fallback
+    const apiKeysString = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '';
+    const apiKeys = apiKeysString.split(',').map((key) => key.trim()).filter(Boolean);
+
+    if (apiKeys.length === 0) {
+      return NextResponse.json({ success: false, error: 'GROQ_API_KEYS أو GROQ_API_KEY غير معرّف في خادم الويب.' }, { status: 500 });
     }
 
-    const groq = new Groq({ apiKey });
     const prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي. 
 قم بتحليل البيانات الفنية الحالية لسهم ${symbol} (سوق: ${market}) واكتب توصية تداول دقيقة باللغة العربية بناءً على المعطيات التالية:
 - السعر الحالي: ${latestPrice.toFixed(2)}
@@ -97,18 +98,36 @@ export async function POST(request: Request) {
   "explanationArabic": "تحليل فني مختصر ومقنع باللغة العربية يشرح سبب اتخاذ هذا القرار الفني بالاعتماد على المؤشرات المذكورة (RSI, MACD) ومستويات الدعم والمقاومة"
 }`;
 
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
-        { role: 'user', content: prompt },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      response_format: { type: 'json_object' },
-    });
+    let content = '';
+    let lastError: any = null;
 
-    const content = chatCompletion.choices[0]?.message?.content;
+    for (let i = 0; i < apiKeys.length; i++) {
+      const currentKey = apiKeys[i];
+      try {
+        const groq = new Groq({ apiKey: currentKey });
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
+            { role: 'user', content: prompt },
+          ],
+          model: 'llama-3.3-70b-versatile',
+          response_format: { type: 'json_object' },
+        });
+
+        const resContent = chatCompletion.choices[0]?.message?.content;
+        if (resContent) {
+          content = resContent;
+          break; // Succeeded, exit loop!
+        }
+      } catch (err: any) {
+        console.warn(`[WARNING] Groq key at index ${i} failed or rate limited. Error: ${err.message}`);
+        lastError = err;
+      }
+    }
+
     if (!content) {
-      return NextResponse.json({ success: false, error: 'لم يقم نموذج الذكاء الاصطناعي بإرجاع رد.' }, { status: 500 });
+      const errorMsg = lastError ? lastError.message : 'جميع مفاتيح Groq API تم استهلاكها أو فشلت.';
+      return NextResponse.json({ success: false, error: `فشل التحليل بالذكاء الاصطناعي: ${errorMsg}` }, { status: 500 });
     }
 
     const parsed = JSON.parse(content);
