@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Portfolio from '@/models/Portfolio';
-import Signal from '@/models/Signal'; // Register Signal model
+import '@/models/Signal'; // Explicitly register Signal model in mongoose memory to avoid population errors
 
 export async function GET() {
   try {
