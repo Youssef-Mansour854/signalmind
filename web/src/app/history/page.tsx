@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface Signal {
   _id: string;
@@ -369,9 +370,9 @@ export default function HistoryPage() {
                       {/* Symbol & Badges */}
                       <td className="p-4 font-bold tracking-wide">
                         <div className="flex items-center gap-2">
-                          <span className={`text-base font-black ${isStrong ? 'text-black' : 'text-white'}`}>
+                          <Link href={`/stock/${trade.symbol}`} className={`text-base font-black hover:underline ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white hover:text-neutral-200'}`}>
                             {trade.symbol}
-                          </span>
+                          </Link>
                           {getTimeframeBadge(trade.timeframe)}
                           {getSignalStrengthBadge(trade.signalStrength)}
                         </div>
@@ -430,9 +431,9 @@ export default function HistoryPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className={`font-black text-sm ${isStrong ? 'text-black' : 'text-white'}`}>
+                    <Link href={`/stock/${trade.symbol}`} className={`font-black text-sm hover:underline ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white hover:text-neutral-205'}`}>
                       {trade.symbol}
-                    </span>
+                    </Link>
                     <div className="flex items-center gap-1">
                       {getTimeframeBadge(trade.timeframe)}
                       {getSignalStrengthBadge(trade.signalStrength)}

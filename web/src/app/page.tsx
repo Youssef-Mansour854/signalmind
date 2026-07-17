@@ -121,7 +121,9 @@ export default function DashboardPage() {
                           {isStrong ? '★ قوية' : '☆ متوسطة'}
                         </span>
                       </div>
-                      <span className="font-black text-sm tracking-wide">{signal.symbol}</span>
+                      <Link href={`/stock/${signal.symbol}`} className="font-black text-sm tracking-wide hover:underline hover:text-white">
+                        {signal.symbol}
+                      </Link>
                     </div>
 
                     <div className="flex justify-between text-[10px] font-mono mt-2">

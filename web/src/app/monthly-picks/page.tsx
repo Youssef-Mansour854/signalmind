@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface Signal {
   _id: string;
@@ -274,7 +275,11 @@ export default function MonthlyPicksPage() {
 
                   return (
                     <tr key={item._id} className="hover:bg-neutral-900/20 transition duration-200">
-                      <td className="p-4 font-bold text-white tracking-wide">{item.symbol}</td>
+                      <td className="p-4 font-bold text-white tracking-wide">
+                        <Link href={`/stock/${item.symbol}`} className="hover:underline hover:text-white">
+                          {item.symbol}
+                        </Link>
+                      </td>
                       <td className="p-4 text-neutral-350 font-mono">
                         {formatPrice(item.actualEntryPrice, item.market, item.symbol)}
                       </td>
@@ -355,9 +360,9 @@ export default function MonthlyPicksPage() {
                     >
                       <td className="p-4 font-bold tracking-wide">
                         <div className="flex flex-col">
-                          <span className={isStrong ? 'text-black text-sm' : 'text-white text-sm'}>
+                          <Link href={`/stock/${signal.symbol}`} className={`hover:underline font-bold text-sm ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white'}`}>
                             {signal.symbol}
-                          </span>
+                          </Link>
                           <span className={`text-[9px] mt-0.5 ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
                             {isStrong ? '★ إشارة قوية' : '☆ إشارة متوسطة'}
                           </span>
