@@ -156,176 +156,145 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-neutral-100 font-sans antialiased" dir="rtl">
-      {/* Header */}
-      <header className="border-b border-neutral-900/50 py-5 sticky top-0 z-50 backdrop-blur-md bg-neutral-950/70">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-6">
-            <div>
-              <h1 className="text-xl font-black tracking-tight uppercase">
-                <span className="bg-white text-transparent bg-clip-text">
-                  محطة سيجنال مايند / SignalMind
-                </span>
-              </h1>
-              <p className="text-[10px] text-neutral-400 mt-1 font-mono uppercase tracking-wider">
-                التداول الخوارزمي الذكي والتحليل الإحصائي وإدارة المراكز
-              </p>
-            </div>
-
-            {/* Sleek monochrome navigation links */}
-            <nav className="flex items-center gap-4 text-xs font-bold font-sans">
-              <Link 
-                href="/" 
-                className={`transition-colors duration-250 py-1.5 px-3 rounded-md ${pathname === '/' ? 'text-black bg-white font-bold border border-white' : 'text-neutral-450 hover:text-neutral-250'}`}
-              >
-                الرئيسية
-              </Link>
-              <Link 
-                href="/history" 
-                className={`transition-colors duration-250 py-1.5 px-3 rounded-md ${pathname === '/history' ? 'text-black bg-white font-bold border border-white' : 'text-neutral-450 hover:text-neutral-250'}`}
-              >
-                سجل التوصيات
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-white animate-pulse shadow-[0_0_10px_#ffffff]" />
-            <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">
-              متصل بالشبكة
-            </span>
-          </div>
+    <div className="p-6 md:p-8 space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
+      {/* Title & Filter Bar */}
+      <div className="flex flex-col md:flex-row justify-between items-center border-b border-neutral-900 pb-4 gap-4">
+        <div>
+          <h2 className="text-lg font-black tracking-tight text-white font-sans">سجل التوصيات التاريخي / History</h2>
+          <p className="text-[10px] text-neutral-500 font-mono mt-1">
+            إجمالي السجلات: {totalRecords} | صفحة {page} من {totalPages}
+          </p>
         </div>
-      </header>
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
-        
-        {/* Title & Filter Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-center border-b border-neutral-900/50 pb-4 gap-4">
-          <div>
-            <h2 className="text-lg font-black tracking-tight text-white font-sans">سجل التوصيات التاريخي</h2>
-            <p className="text-[10px] text-neutral-500 font-mono mt-1">
-              إجمالي السجلات: {totalRecords} | صفحة {page} من {totalPages}
-            </p>
-          </div>
-
-          {/* Market & Status Filters */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-            {/* Market Tabs */}
-            <div className="flex gap-1.5 p-1 rounded-lg bg-neutral-950 border border-neutral-900 font-sans">
-              <button
-                onClick={() => setMarketFilter('EGX')}
-                className={`px-4 py-1.5 text-xs font-bold transition-all duration-200 rounded cursor-pointer ${
-                  marketFilter === 'EGX'
-                    ? 'bg-white text-black font-bold'
-                    : 'text-neutral-400 hover:text-neutral-250'
-                }`}
-              >
-                EGX
-              </button>
-              <button
-                onClick={() => setMarketFilter('US')}
-                className={`px-4 py-1.5 text-xs font-bold transition-all duration-200 rounded cursor-pointer ${
-                  marketFilter === 'US'
-                    ? 'bg-white text-black font-bold'
-                    : 'text-neutral-400 hover:text-neutral-250'
-                }`}
-              >
-                US
-              </button>
-            </div>
-
-            {/* Status Dropdown Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-neutral-950 border border-neutral-900 text-neutral-300 py-1.5 px-4 text-xs rounded-md focus:outline-none focus:border-white font-bold font-sans cursor-pointer transition-all duration-200"
+        {/* Market & Status Filters */}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+          {/* Market Tabs */}
+          <div className="flex gap-1.5 p-1 rounded-lg bg-neutral-950 border border-neutral-900 font-sans">
+            <button
+              onClick={() => setMarketFilter('EGX')}
+              className={`px-4 py-1.5 text-xs font-bold transition-all duration-200 rounded cursor-pointer ${
+                marketFilter === 'EGX'
+                  ? 'bg-white text-black font-bold'
+                  : 'text-neutral-450 hover:text-white'
+              }`}
             >
-              <option value="All">جميع الحالات (All)</option>
-              <option value="Active">النشطة والمعلقة (Active)</option>
-              <option value="Closed">المغلقة بالكامل (Closed)</option>
-              <option value="Win">رابحة فقط (Wins)</option>
-              <option value="Loss">خاسرة فقط (Losses)</option>
-            </select>
+              EGX
+            </button>
+            <button
+              onClick={() => setMarketFilter('US')}
+              className={`px-4 py-1.5 text-xs font-bold transition-all duration-200 rounded cursor-pointer ${
+                marketFilter === 'US'
+                  ? 'bg-white text-black font-bold'
+                  : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              US
+            </button>
           </div>
+
+          {/* Status Dropdown Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-neutral-950 border border-neutral-900 text-neutral-300 py-1.5 px-4 text-xs rounded-md focus:outline-none focus:border-white font-bold font-sans cursor-pointer transition-all duration-200"
+          >
+            <option value="All">جميع الحالات (All)</option>
+            <option value="Active">النشطة والمعلقة (Active)</option>
+            <option value="Closed">المغلقة بالكامل (Closed)</option>
+            <option value="Win">رابحة فقط (Wins)</option>
+            <option value="Loss">خاسرة فقط (Losses)</option>
+          </select>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="py-20 text-center font-mono text-xs text-neutral-500">
-            جاري تحميل السجلات التاريخية من قاعدة البيانات...
-          </div>
-        ) : error ? (
-          <div className="p-4 border border-neutral-800 bg-neutral-950 text-neutral-400 text-xs font-mono rounded">
-            خطأ: {error}
-          </div>
-        ) : signals.length === 0 ? (
-          <div className="py-20 text-center text-xs text-neutral-600 border border-neutral-900 rounded-lg bg-neutral-950/20">
-            لا توجد إشارات تطابق خيارات التصفية المحددة.
-          </div>
-        ) : (
-          <>
-            {/* Desktop View Table */}
-            <div className="hidden md:block overflow-x-auto glass-card rounded-lg border border-neutral-900">
-              <table className="w-full border-collapse text-right text-xs">
-                <thead>
-                  <tr className="border-b border-neutral-900/50 bg-neutral-900/60 text-neutral-200 sticky top-0 bg-neutral-950 z-10 font-bold font-sans">
-                    <th className="p-4">السهم والمدى وقوة الإشارة</th>
-                    <th className="p-4">سعر الدخول</th>
-                    <th className="p-4">السعر الحالي / الإغلاق</th>
-                    <th className="p-4">الهدف / وقف الخسارة</th>
-                    <th className="p-4 text-center">التقييم</th>
-                    <th className="p-4 text-center">الحالة والعائد</th>
-                    <th className="p-4 text-left">تاريخ التوصية</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-900/40 bg-neutral-950/20">
-                  {signals.map(trade => {
-                    return (
-                      <tr key={trade._id} className="hover:bg-neutral-900/20 transition-all duration-200">
-                        <td className="p-4 font-bold text-white tracking-wide">
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <span className="text-base">{trade.symbol}</span>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {getTimeframeBadge(trade.timeframe)}
-                              {getSignalStrengthBadge(trade.signalStrength)}
-                            </div>
+      {loading ? (
+        <div className="py-20 text-center font-mono text-xs text-neutral-500">
+          جاري تحميل السجلات التاريخية من قاعدة البيانات...
+        </div>
+      ) : error ? (
+        <div className="p-4 border border-neutral-800 bg-neutral-950 text-neutral-400 text-xs font-mono rounded">
+          خطأ: {error}
+        </div>
+      ) : signals.length === 0 ? (
+        <div className="py-20 text-center text-xs text-neutral-600 border border-neutral-900 rounded-lg bg-neutral-950/20">
+          لا توجد إشارات تطابق خيارات التصفية المحددة.
+        </div>
+      ) : (
+        <>
+          {/* Desktop View Table */}
+          <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded bg-neutral-950/20">
+            <table className="w-full border-collapse text-right text-xs">
+              <thead>
+                <tr className="border-b border-neutral-900 bg-neutral-900/40 text-neutral-300 font-bold font-sans">
+                  <th className="p-4">السهم والمدى وقوة الإشارة</th>
+                  <th className="p-4">سعر الدخول</th>
+                  <th className="p-4">السعر الحالي / الإغلاق</th>
+                  <th className="p-4">الهدف / وقف الخسارة</th>
+                  <th className="p-4 text-center">التقييم</th>
+                  <th className="p-4 text-center">الحالة والعائد</th>
+                  <th className="p-4 text-left">تاريخ التوصية</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-900/40">
+                {signals.map(trade => {
+                  const isStrong = trade.signalStrength === 'قوية';
+                  return (
+                    <tr key={trade._id} className={`transition duration-200 ${
+                      isStrong
+                        ? 'bg-white text-black font-semibold'
+                        : 'hover:bg-neutral-900/20 text-neutral-350'
+                    }`}>
+                      <td className="p-4 font-bold tracking-wide">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                          <span className={`text-base ${isStrong ? 'text-black' : 'text-white'}`}>{trade.symbol}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {getTimeframeBadge(trade.timeframe)}
+                            {getSignalStrengthBadge(trade.signalStrength)}
                           </div>
-                          <div className="text-[10px] text-neutral-500 mt-1 font-mono uppercase">
-                            نوع: {trade.signalType} | RRR: {trade.scoreMetrics.riskRewardRatio?.toFixed(2)}
-                          </div>
-                        </td>
-                        <td className="p-4 text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
-                        <td className="p-4 font-mono font-bold text-neutral-100">
-                          {formatPrice(trade.currentPrice, trade.market, trade.symbol)}
-                        </td>
-                        <td className="p-4 font-mono">
-                          <div className="text-white font-bold">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</div>
-                          <div className="text-neutral-450 mt-1">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</div>
-                        </td>
-                        <td className="p-4 text-center font-mono">
-                          <span className="inline-block px-2 py-0.5 text-[10px] bg-neutral-900 border border-neutral-850 rounded">
-                            {trade.scoreMetrics.totalScore}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center">
-                          {getStatusBadge(trade.status, trade.pnlPercentage)}
-                        </td>
-                        <td className="p-4 text-left text-neutral-500 font-mono">{formatDate(trade.createdAt)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                        <div className={`text-[10px] mt-1 font-mono uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
+                          نوع: {trade.signalType} | RRR: {trade.scoreMetrics.riskRewardRatio?.toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="p-4 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</td>
+                      <td className="p-4 font-mono font-bold">
+                        {formatPrice(trade.currentPrice, trade.market, trade.symbol)}
+                      </td>
+                      <td className="p-4 font-mono">
+                        <div className={`font-bold ${isStrong ? 'text-black' : 'text-white'}`}>{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</div>
+                        <div className={`mt-1 ${isStrong ? 'text-neutral-700' : 'text-neutral-450'}`}>{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</div>
+                      </td>
+                      <td className="p-4 text-center font-mono">
+                        <span className={`inline-block px-2 py-0.5 text-[10px] rounded border ${
+                          isStrong ? 'bg-black text-white border-black font-black' : 'bg-neutral-900 border-neutral-850 text-neutral-300'
+                        }`}>
+                          {trade.scoreMetrics.totalScore}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        {getStatusBadge(trade.status, trade.pnlPercentage)}
+                      </td>
+                      <td className={`p-4 text-left font-mono ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>{formatDate(trade.createdAt)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-            {/* Mobile View Card Grid */}
-            <div className="md:hidden space-y-4">
-              {signals.map(trade => (
-                <div key={trade._id} className="glass-card p-4 rounded-lg space-y-3 text-right border border-neutral-900 hover:bg-neutral-900/20 transition duration-200">
+          {/* Mobile View Card Grid */}
+          <div className="md:hidden space-y-4">
+            {signals.map(trade => {
+              const isStrong = trade.signalStrength === 'قوية';
+              return (
+                <div key={trade._id} className={`p-4 rounded-lg space-y-3 text-right border transition duration-200 ${
+                  isStrong
+                    ? 'bg-white text-black border-white font-semibold'
+                    : 'bg-neutral-950 text-neutral-350 border-neutral-900 hover:bg-neutral-900/20'
+                }`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="font-bold text-white tracking-wide text-sm">{trade.symbol}</span>
+                      <span className={`font-bold tracking-wide text-sm ${isStrong ? 'text-black' : 'text-white'}`}>{trade.symbol}</span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {getTimeframeBadge(trade.timeframe)}
                         {getSignalStrengthBadge(trade.signalStrength)}
@@ -335,55 +304,57 @@ export default function HistoryPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <span className="text-neutral-500 block text-[10px]">سعر الدخول:</span>
-                      <span className="text-neutral-300 font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
+                      <span className={`block text-[10px] ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>سعر الدخول:</span>
+                      <span className="font-mono">{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
                     </div>
                     <div>
-                      <span className="text-neutral-500 block text-[10px]">السعر الحالي/الإغلاق:</span>
-                      <span className="text-neutral-100 font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
+                      <span className={`block text-[10px] ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>السعر الحالي/الإغلاق:</span>
+                      <span className="font-mono">{formatPrice(trade.currentPrice, trade.market, trade.symbol)}</span>
                     </div>
                     <div>
-                      <span className="text-neutral-500 block text-[10px]">الهدف (TP):</span>
-                      <span className="text-white font-bold font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
+                      <span className={`block text-[10px] ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>الهدف (TP):</span>
+                      <span className="font-bold font-mono">{formatPrice(trade.takeProfit, trade.market, trade.symbol)}</span>
                     </div>
                     <div>
-                      <span className="text-neutral-500 block text-[10px]">وقف الخسارة (SL):</span>
-                      <span className="text-neutral-450 font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
+                      <span className={`block text-[10px] ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>وقف الخسارة (SL):</span>
+                      <span className="font-mono">{formatPrice(trade.stopLoss, trade.market, trade.symbol)}</span>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-neutral-900/50 text-[10px] text-neutral-500 font-mono">
+                  <div className={`flex justify-between items-center pt-2 border-t text-[10px] font-mono ${
+                    isStrong ? 'text-neutral-700 border-neutral-300' : 'text-neutral-500 border-neutral-900/50'
+                  }`}>
                     <span>نقاط التقييم: {trade.scoreMetrics.totalScore}</span>
                     <span>التاريخ: {formatDate(trade.createdAt)}</span>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+          </div>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-4 pt-4 font-mono text-xs">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 border border-neutral-850 hover:border-neutral-700 bg-neutral-950 text-neutral-300 hover:text-white rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
-                >
-                  السابق
-                </button>
-                <span className="text-neutral-400">
-                  الصفحة {page} من {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-4 py-2 border border-neutral-850 hover:border-neutral-700 bg-neutral-950 text-neutral-300 hover:text-white rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
-                >
-                  التالي
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 pt-4 font-mono text-xs">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-4 py-2 border border-neutral-850 hover:border-neutral-700 bg-neutral-950 text-neutral-300 hover:text-white rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+              >
+                السابق
+              </button>
+              <span className="text-neutral-400">
+                الصفحة {page} من {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-4 py-2 border border-neutral-850 hover:border-neutral-700 bg-neutral-950 text-neutral-300 hover:text-white rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+              >
+                التالي
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

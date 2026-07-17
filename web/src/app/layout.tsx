@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google";
 import "./globals.css";
+import Sidebar from "@/components/Sidebar";
 
 const cairo = Cairo({
   variable: "--font-cairo",
@@ -24,7 +25,12 @@ export default function RootLayout({
       dir="rtl"
       className={`${cairo.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100 font-sans">{children}</body>
+      <body className="min-h-full flex flex-col md:flex-row bg-neutral-950 text-neutral-100 font-sans">
+        <Sidebar />
+        <div className="flex-1 min-h-screen md:pl-64 flex flex-col overflow-y-auto">
+          {children}
+        </div>
+      </body>
     </html>
   );
 }

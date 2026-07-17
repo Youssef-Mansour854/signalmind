@@ -16,6 +16,9 @@ export async function GET(request: Request) {
     const query: any = {};
     if (market) query.market = market;
     
+    const timeframe = searchParams.get('timeframe');
+    if (timeframe) query.timeframe = timeframe;
+    
     if (status) {
       if (status === 'Win') {
         query.status = 'Hit TP';

@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Portfolio from '@/models/Portfolio';
+import Signal from '@/models/Signal'; // Register Signal model
 
 export async function GET() {
   try {
     await dbConnect();
-    const portfolio = await Portfolio.find({}).sort({ executedAt: -1 });
+    const portfolio = await Portfolio.find({})
+      .populate('signalId')
+      .sort({ executedAt: -1 });
     return NextResponse.json({ success: true, data: portfolio });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
