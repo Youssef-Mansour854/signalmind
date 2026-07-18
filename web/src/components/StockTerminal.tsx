@@ -215,14 +215,14 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full items-start">
       {/* Chart Column */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="w-full border border-neutral-900 bg-neutral-950 rounded-lg overflow-hidden h-[450px]">
+      <div className="w-full lg:col-span-2 space-y-4">
+        <div className="w-full border border-neutral-900 bg-neutral-950 rounded-lg overflow-hidden h-[380px] sm:h-[450px] md:h-[550px]">
           <div id={`tv-chart-${signal.symbol}`} ref={containerRef} className="w-full h-full" />
         </div>
       </div>
 
       {/* Details & Actions Panel Column */}
-      <div className="space-y-6">
+      <div className="w-full space-y-6">
         {/* Signal Meta Info Card */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
           <div className="border-b border-neutral-900 pb-4">

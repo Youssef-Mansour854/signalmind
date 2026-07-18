@@ -239,7 +239,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
       {/* Title Bar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-neutral-900 pb-4 gap-4">
         <div>
@@ -339,8 +339,8 @@ export default function HistoryPage() {
       ) : (
         <>
           {/* Desktop Data Table */}
-          <div className="hidden md:block overflow-x-auto border border-neutral-900 rounded bg-neutral-950/20">
-            <table className="w-full border-collapse text-right text-xs">
+          <div className="hidden md:block w-full overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-950/20">
+            <table className="w-full min-w-[750px] border-collapse text-right text-xs">
               <thead>
                 <tr className="border-b border-neutral-900 bg-neutral-900/40 text-neutral-300 font-bold font-sans">
                   <th className="p-4">السهم والقوة والمدى</th>

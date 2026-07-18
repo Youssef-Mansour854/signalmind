@@ -25,7 +25,7 @@ export default async function StockDetailsPage({ params }: PageProps) {
   const portfolioItem = portfolioDoc ? JSON.parse(JSON.stringify(portfolioDoc)) : null;
 
   return (
-    <div className="p-6 md:p-8 space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
       {/* Title Bar */}
       <div className="flex items-center justify-between border-b border-neutral-900 pb-4">
         <div>

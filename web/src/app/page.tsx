@@ -162,7 +162,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-neutral-900 pb-6 gap-4">
         <div>
