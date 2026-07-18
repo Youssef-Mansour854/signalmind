@@ -80,14 +80,14 @@ export default function DashboardPage() {
 
     return (
       <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg flex flex-col justify-between h-[360px]">
-        <div>
+        <div className="flex-1 flex flex-col overflow-hidden">
           {/* Widget Header */}
           <div className="flex items-center justify-between border-b border-neutral-900 pb-3 mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{badgeIcon}</span>
-              <h2 className="text-sm font-black tracking-tight text-white">{title}</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm shrink-0">{badgeIcon}</span>
+              <h2 className="text-sm font-black tracking-tight text-white truncate">{title}</h2>
             </div>
-            <span className="text-[10px] text-neutral-500 font-mono">ACTIVE / PENDING</span>
+            <span className="text-[10px] text-neutral-500 font-mono shrink-0">ACTIVE / PENDING</span>
           </div>
 
           {/* Widget List */}
@@ -112,16 +112,16 @@ export default function DashboardPage() {
                   >
                     <div className="flex justify-between items-center mb-1">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-mono border rounded px-1.5 py-0.5 ${
+                        <span className={`text-[9px] font-mono border rounded px-1.5 py-0.5 shrink-0 ${
                           isStrong ? 'bg-black text-white border-black' : 'bg-neutral-900 text-neutral-400 border-neutral-800'
                         }`}>
                           {signal.signalType}
                         </span>
-                        <span className={`text-[10px] font-bold ${isStrong ? 'text-black' : 'text-neutral-400'}`}>
+                        <span className={`text-[10px] font-bold shrink-0 ${isStrong ? 'text-black' : 'text-neutral-400'}`}>
                           {isStrong ? '★ قوية' : '☆ متوسطة'}
                         </span>
                       </div>
-                      <Link href={`/stock/${signal.symbol}`} className="font-black text-sm tracking-wide hover:underline hover:text-white">
+                      <Link href={`/stock/${signal.symbol}`} className="font-black text-sm tracking-wide hover:underline hover:text-white truncate">
                         {signal.symbol}
                       </Link>
                     </div>
@@ -148,13 +148,13 @@ export default function DashboardPage() {
         </div>
 
         {/* View All Button */}
-        <div className="pt-4 border-t border-neutral-900 mt-2">
+        <div className="pt-3 mt-auto border-t border-neutral-900/60">
           <Link
             href={viewAllPath}
-            className="w-full py-2 text-xs font-bold border border-neutral-900 bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white transition duration-200 rounded flex items-center justify-center gap-2"
+            className="w-full flex items-center justify-center p-2.5 rounded-lg border border-neutral-800 bg-neutral-900/50 hover:bg-neutral-850 hover:border-neutral-700 text-neutral-300 hover:text-white transition duration-200 text-xs md:text-sm font-bold gap-2"
           >
             <span>عرض الكل</span>
-            <span className="text-sm">&larr;</span>
+            <span className="text-sm shrink-0">&larr;</span>
           </Link>
         </div>
       </div>
@@ -195,10 +195,10 @@ export default function DashboardPage() {
 
           <button
             onClick={fetchSignals}
-            className="p-1.5 border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white rounded transition"
+            className="p-1.5 border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white rounded transition shrink-0"
             title="تحديث البيانات"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.27 15" />
             </svg>
           </button>
