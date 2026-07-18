@@ -21,9 +21,12 @@ export default function Sidebar() {
     <>
       {/* Mobile Top Header */}
       <div className="md:hidden flex items-center justify-between bg-neutral-950 border-b border-neutral-900 px-4 py-3 sticky top-0 z-40 w-full" dir="rtl">
-        <div className="flex flex-col text-right">
-          <span className="text-xs font-black tracking-wider text-white">SIGNALMIND</span>
-          <span className="text-[9px] text-neutral-500 font-mono">FINANCIAL TERMINAL</span>
+        <div className="flex items-center gap-2 text-right">
+          <img src="/logo.svg" alt="SignalMind Logo" className="h-6 w-6 rounded" />
+          <div className="flex flex-col">
+            <span className="text-xs font-black tracking-wider text-white">SIGNALMIND</span>
+            <span className="text-[9px] text-neutral-500 font-mono">FINANCIAL TERMINAL</span>
+          </div>
         </div>
         <button 
           onClick={() => setIsOpen(!isOpen)}
@@ -60,7 +63,7 @@ export default function Sidebar() {
           {/* Brand/Logo Area */}
           <div className="mb-8 text-right">
             <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2 justify-start">
-              <span className="bg-white text-black px-1.5 py-0.5 rounded text-sm font-mono font-black">SM</span>
+              <img src="/logo.svg" alt="SignalMind Logo" className="h-7 w-7 rounded" />
               <span>سيجنال مايند</span>
             </h1>
             <p className="text-[9px] text-neutral-500 mt-1 font-mono uppercase tracking-wider">
