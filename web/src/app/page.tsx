@@ -151,9 +151,10 @@ export default function DashboardPage() {
         <div className="pt-4 border-t border-neutral-900 mt-2">
           <Link
             href={viewAllPath}
-            className="w-full inline-block py-2 text-center text-xs font-bold border border-neutral-900 bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white transition duration-200 rounded"
+            className="w-full py-2 text-xs font-bold border border-neutral-900 bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white transition duration-200 rounded flex items-center justify-center gap-2"
           >
-            عرض الكل &larr;
+            <span>عرض الكل</span>
+            <span className="text-sm">&larr;</span>
           </Link>
         </div>
       </div>

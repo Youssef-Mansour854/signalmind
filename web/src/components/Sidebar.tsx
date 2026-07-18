@@ -59,7 +59,7 @@ export default function Sidebar() {
         <div className="flex flex-col flex-1 p-6 overflow-y-auto">
           {/* Brand/Logo Area */}
           <div className="mb-8 text-right">
-            <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2 justify-end">
+            <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2 justify-start">
               <span className="bg-white text-black px-1.5 py-0.5 rounded text-sm font-mono font-black">SM</span>
               <span>سيجنال مايند</span>
             </h1>
@@ -84,7 +84,7 @@ export default function Sidebar() {
                   }`}
                 >
                   <span className="text-sm">{item.icon}</span>
-                  <span className="flex-1 text-right">{item.name}</span>
+                  <span className="flex-1 text-start">{item.name}</span>
                 </Link>
               );
             })}
