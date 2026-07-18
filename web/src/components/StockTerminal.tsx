@@ -225,15 +225,43 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
       <div className="space-y-6">
         {/* Signal Meta Info Card */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
-          <div className="flex items-center justify-between border-b border-neutral-900 pb-3">
-            <span className="text-[10px] text-neutral-500 font-mono">SIGNAL METRICS</span>
-            <div className="flex items-center gap-2">
-              <span className="bg-white text-black font-bold px-2 py-0.5 rounded text-[9px]">
-                {signal.signalStrength === 'قوية' ? '★ قوية' : '☆ متوسطة'}
-              </span>
-              <span className="border border-neutral-800 bg-neutral-900 text-neutral-400 px-1.5 py-0.5 rounded text-[9px] font-mono">
-                {signal.timeframe}
-              </span>
+          <div className="border-b border-neutral-900 pb-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] text-neutral-500 font-mono">SIGNAL METRICS</span>
+            </div>
+
+            {/* Segmented Signal Gauge Bar */}
+            <div className="flex w-full items-center dir-ltr">
+              {['بيع قوي', 'بيع', 'انتظار', 'شراء', 'شراء قوي'].map((label, idx) => {
+                const activeIdx = signal.signalType === 'BUY'
+                  ? (signal.signalStrength === 'قوية' ? 4 : 3)
+                  : signal.signalType === 'SELL'
+                  ? (signal.signalStrength === 'قوية' ? 0 : 1)
+                  : 2;
+                const isActive = activeIdx === idx;
+                const isFirst = idx === 0;
+                const isLast = idx === 4;
+
+                return (
+                  <div
+                    key={label}
+                    className={`flex-1 py-1 text-center text-xs md:text-sm transition-all duration-150 ${
+                      isFirst ? 'rounded-l-md' : ''
+                    } ${isLast ? 'rounded-r-md' : ''} ${
+                      isActive
+                        ? 'bg-white text-black font-bold py-1 text-center text-xs md:text-sm'
+                        : 'text-neutral-600 border-y border-r border-neutral-800 py-1 text-center text-xs md:text-sm'
+                    } ${isFirst && !isActive ? 'border-l border-neutral-800' : ''}`}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Timeframe Display */}
+            <div className="text-center text-neutral-400 text-xs tracking-widest mt-2 uppercase font-mono">
+              مدى التوصية: {signal.timeframe || 'غير محدد'}
             </div>
           </div>
 
