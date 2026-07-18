@@ -7,18 +7,50 @@ import '@/models/Signal';
 
 const yahooFinance = new YahooFinance();
 
-export async function GET() {
+const getTimeframeStartDate = (tf: string): Date | null => {
+  const now = new Date();
+  if (tf === '1d') return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (tf === '1w') return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  if (tf === '3m') return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  if (tf === '6m') return new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+  if (tf === '1y') return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  return null; // 'all'
+};
+
+export async function GET(request: Request) {
   try {
     await dbConnect();
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type') === 'SYSTEM' ? 'SYSTEM' : 'USER';
+    const timeframe = searchParams.get('timeframe') || 'all';
 
-    // 1. Fetch available cash
-    const cashDoc = await Setting.findOne({ key: 'availableCash' });
+    const startDate = getTimeframeStartDate(timeframe);
+
+    // 1. Fetch available cash for requested portfolio type
+    const cashKey = `availableCash_${type}`;
+    const cashDoc = await Setting.findOne({ key: cashKey });
     const availableCash = cashDoc && typeof cashDoc.value === 'number' ? cashDoc.value : 100000;
 
-    // 2. Fetch active portfolio positions
-    const activePositions = await Portfolio.find({ status: 'ACTIVE' }).populate('signalId');
+    // 2. Fetch active portfolio positions for type and optional date range
+    const activeFilter: any = { status: 'ACTIVE', portfolioType: type };
+    if (startDate) {
+      activeFilter.executedAt = { $gte: startDate };
+    }
+    const activePositions = await Portfolio.find(activeFilter).populate('signalId');
 
-    // 3. Get unique symbols and fetch live prices via yahoo-finance2
+    // 3. Fetch closed positions for realized PnL within timeframe
+    const closedFilter: any = { status: 'CLOSED', portfolioType: type };
+    if (startDate) {
+      closedFilter.closedAt = { $gte: startDate };
+    }
+    const closedPositions = await Portfolio.find(closedFilter);
+
+    let realizedPnL = 0;
+    for (const cp of closedPositions) {
+      realizedPnL += (cp.finalPnL !== undefined ? cp.finalPnL : 0);
+    }
+
+    // 4. Get unique symbols and fetch live prices via yahoo-finance2
     const symbolMap: Record<string, number> = {};
 
     if (activePositions.length > 0) {
@@ -45,7 +77,7 @@ export async function GET() {
       );
     }
 
-    // 4. Compute metrics
+    // 5. Compute metrics
     let totalInvestedCost = 0;
     let currentStocksValue = 0;
 
@@ -75,20 +107,26 @@ export async function GET() {
       };
     });
 
-    const totalPortfolioValue = availableCash + currentStocksValue;
-    const totalProfitLoss = currentStocksValue - totalInvestedCost;
+    const unrealizedPnL = currentStocksValue - totalInvestedCost;
+    const totalProfitLoss = unrealizedPnL + realizedPnL;
+    const totalPortfolioValue = availableCash + currentStocksValue + realizedPnL;
     const totalProfitLossPercentage = totalInvestedCost > 0 ? (totalProfitLoss / totalInvestedCost) * 100 : 0;
 
     return NextResponse.json({
       success: true,
       data: {
+        portfolioType: type,
+        timeframe,
         availableCash,
         totalInvestedCost: Number(totalInvestedCost.toFixed(2)),
         currentStocksValue: Number(currentStocksValue.toFixed(2)),
+        realizedPnL: Number(realizedPnL.toFixed(2)),
+        unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
         totalPortfolioValue: Number(totalPortfolioValue.toFixed(2)),
         totalProfitLoss: Number(totalProfitLoss.toFixed(2)),
         totalProfitLossPercentage: Number(totalProfitLossPercentage.toFixed(2)),
         activePositionsCount: activePositions.length,
+        closedPositionsCount: closedPositions.length,
         positions: positionsDetail,
       },
     });

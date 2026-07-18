@@ -43,7 +43,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Portfolio Stats State
+  // Dual Portfolio & Timeframe State
+  const [portfolioType, setPortfolioType] = useState<'USER' | 'SYSTEM'>('USER');
+  const [timeframe, setTimeframe] = useState<'1d' | '1w' | '3m' | '6m' | '1y' | 'all'>('all');
   const [portfolioStats, setPortfolioStats] = useState<PortfolioStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
@@ -68,10 +70,10 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchPortfolioStats = async () => {
+  const fetchPortfolioStats = async (pType = portfolioType, tf = timeframe) => {
     setStatsLoading(true);
     try {
-      const res = await fetch('/api/portfolio/stats');
+      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}`);
       const json = await res.json();
       if (json.success && json.data) {
         setPortfolioStats(json.data);
@@ -85,12 +87,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchSignals();
-    fetchPortfolioStats();
+    fetchPortfolioStats(portfolioType, timeframe);
 
     // Auto poll stats every 30 seconds
-    const interval = setInterval(fetchPortfolioStats, 30000);
+    const interval = setInterval(() => fetchPortfolioStats(portfolioType, timeframe), 30000);
     return () => clearInterval(interval);
-  }, [marketFilter]);
+  }, [marketFilter, portfolioType, timeframe]);
 
   const handleCashSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,12 +101,12 @@ export default function DashboardPage() {
       const res = await fetch('/api/portfolio/cash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availableCash: Number(cashInput) }),
+        body: JSON.stringify({ availableCash: Number(cashInput), type: portfolioType }),
       });
       const json = await res.json();
       if (json.success) {
         setIsCashModalOpen(false);
-        fetchPortfolioStats();
+        fetchPortfolioStats(portfolioType, timeframe);
       } else {
         alert(json.error || 'فشلت عملية حفظ السيولة المتاحة');
       }
@@ -261,7 +263,7 @@ export default function DashboardPage() {
           <button
             onClick={() => {
               fetchSignals();
-              fetchPortfolioStats();
+              fetchPortfolioStats(portfolioType, timeframe);
             }}
             className="p-1.5 border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white rounded transition shrink-0"
             title="تحديث البيانات"
@@ -275,37 +277,92 @@ export default function DashboardPage() {
 
       {/* Live Portfolio Equity & Balance Banner */}
       <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
-        <div className="flex items-center justify-between border-b border-neutral-900 pb-3 gap-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-900 pb-4 gap-4">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#ffffff] shrink-0" />
             <h2 className="text-xs font-black uppercase tracking-wider text-neutral-400 font-mono">
               [ لوحة تحكم المحفظة الحية / LIVE PORTFOLIO EQUITY ]
             </h2>
           </div>
-          <button
-            onClick={fetchPortfolioStats}
-            disabled={statsLoading}
-            className="text-[10px] font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shrink-0"
-            title="تحديث قيم المحفظة"
-          >
-            <span>مزامنة لحظية</span>
-            <svg className={`h-3 w-3 shrink-0 ${statsLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.27 15" />
-            </svg>
-          </button>
+
+          <div className="flex items-center gap-3">
+            {/* Dual Portfolio Toggle Switch */}
+            <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
+              <button
+                onClick={() => setPortfolioType('USER')}
+                className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                  portfolioType === 'USER' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+                }`}
+              >
+                المحفظة الشخصية 👤
+              </button>
+              <button
+                onClick={() => setPortfolioType('SYSTEM')}
+                className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                  portfolioType === 'SYSTEM' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+                }`}
+              >
+                محفظة النظام الآلية 🤖
+              </button>
+            </div>
+
+            <button
+              onClick={() => fetchPortfolioStats(portfolioType, timeframe)}
+              disabled={statsLoading}
+              className="text-[10px] font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shrink-0"
+              title="تحديث قيم المحفظة"
+            >
+              <span>مزامنة لحظية</span>
+              <svg className={`h-3 w-3 shrink-0 ${statsLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.27 15" />
+              </svg>
+            </button>
+          </div>
         </div>
 
+        {/* Timeframe Selector Toolbar */}
+        <div className="flex items-center justify-between border-b border-neutral-900/60 pb-3 gap-2 overflow-x-auto">
+          <span className="text-[10px] text-neutral-500 font-mono font-bold shrink-0">الفترة الزمنية للأداء:</span>
+          <div className="flex gap-1">
+            {[
+              { id: '1d', label: 'اليوم' },
+              { id: '1w', label: 'الأسبوع' },
+              { id: '3m', label: '٣ أشهر' },
+              { id: '6m', label: '٦ أشهر' },
+              { id: '1y', label: '١ سنة' },
+              { id: 'all', label: 'الكل' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTimeframe(item.id as any)}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded transition border whitespace-nowrap cursor-pointer ${
+                  timeframe === item.id
+                    ? 'bg-white text-black border-white font-black'
+                    : 'bg-neutral-900/40 text-neutral-400 border-neutral-800 hover:text-white hover:bg-neutral-850'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 4 Cards with Skeleton Loading Animation */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
           {/* Card 1: Total Portfolio Value */}
           <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
             <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
               القيمة الإجمالية للمحفظة 💰
             </span>
-            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.totalPortfolioValue || 0)}
-            </span>
+            {statsLoading ? (
+              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+            ) : (
+              <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                {formatCurrency(portfolioStats?.totalPortfolioValue || 0)}
+              </span>
+            )}
             <span className="text-[9px] text-neutral-500 font-mono">
-              (السيولة + القيمة السوقية للأسهم)
+              (السيولة + الأسهم + الأرباح المحققة)
             </span>
           </div>
 
@@ -315,21 +372,27 @@ export default function DashboardPage() {
               <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase">
                 السيولة المتاحة (Cash) 💳
               </span>
-              <button
-                onClick={() => {
-                  setCashInput(String(portfolioStats?.availableCash || 100000));
-                  setIsCashModalOpen(true);
-                }}
-                className="text-[9px] font-bold text-neutral-400 hover:text-white border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 rounded transition cursor-pointer"
-              >
-                [تعديل]
-              </button>
+              {portfolioType === 'USER' && (
+                <button
+                  onClick={() => {
+                    setCashInput(String(portfolioStats?.availableCash || 100000));
+                    setIsCashModalOpen(true);
+                  }}
+                  className="text-[9px] font-bold text-neutral-400 hover:text-white border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 rounded transition cursor-pointer"
+                >
+                  [تعديل]
+                </button>
+              )}
             </div>
-            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.availableCash || 0)}
-            </span>
+            {statsLoading ? (
+              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+            ) : (
+              <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                {formatCurrency(portfolioStats?.availableCash || 0)}
+              </span>
+            )}
             <span className="text-[9px] text-neutral-500 font-mono">
-              النقد المتاح للاستثمار
+              النقد المتاح ({portfolioType === 'USER' ? 'المحفظة الشخصية' : 'محفظة النظام'})
             </span>
           </div>
 
@@ -338,11 +401,15 @@ export default function DashboardPage() {
             <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
               رأس المال المستثمر 📉
             </span>
-            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.totalInvestedCost || 0)}
-            </span>
+            {statsLoading ? (
+              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+            ) : (
+              <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                {formatCurrency(portfolioStats?.totalInvestedCost || 0)}
+              </span>
+            )}
             <span className="text-[9px] text-neutral-500 font-mono">
-              في {portfolioStats?.activePositionsCount || 0} مراكز مفتوحة
+              في {portfolioStats?.activePositionsCount || 0} مراكز نشطة
             </span>
           </div>
 
@@ -351,18 +418,22 @@ export default function DashboardPage() {
             <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
               إجمالي الأرباح/الخسائر ⚡
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
-                {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
-                {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
-              </span>
-              <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
-                {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
-              </span>
-            </div>
+            {statsLoading ? (
+              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+            ) : (
+              <div className="flex items-baseline gap-2">
+                <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                  {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                  {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
+                </span>
+                <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                  ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                  {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
+                </span>
+              </div>
+            )}
             <span className="text-[9px] text-neutral-500 font-mono">
-              الأداء اللحظي للمراكز
+              الأداء خلال الفترة المحددة
             </span>
           </div>
         </div>

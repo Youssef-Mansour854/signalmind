@@ -3,10 +3,17 @@ import dbConnect from '@/lib/mongodb';
 import Portfolio from '@/models/Portfolio';
 import '@/models/Signal'; // Explicitly register Signal model in mongoose memory to avoid population errors
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await dbConnect();
-    const portfolio = await Portfolio.find({})
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type');
+    const filter: any = {};
+    if (type === 'USER' || type === 'SYSTEM') {
+      filter.portfolioType = type;
+    }
+
+    const portfolio = await Portfolio.find(filter)
       .populate('signalId')
       .sort({ executedAt: -1 });
     return NextResponse.json({ success: true, data: portfolio });
@@ -20,7 +27,7 @@ export async function POST(request: Request) {
     await dbConnect();
     const body = await request.json();
     
-    const { signalId, symbol, market, actualEntryPrice, positionSize } = body;
+    const { signalId, symbol, market, actualEntryPrice, positionSize, portfolioType } = body;
     
     if (!signalId || !symbol || !market || actualEntryPrice === undefined || positionSize === undefined) {
       return NextResponse.json({ success: false, error: 'برجاء ملء جميع الحقول المطلوبة' }, { status: 400 });
@@ -29,6 +36,7 @@ export async function POST(request: Request) {
     const entry = Number(actualEntryPrice);
     const size = Number(positionSize);
     const quantity = entry > 0 ? size / entry : 0;
+    const pType = portfolioType === 'SYSTEM' ? 'SYSTEM' : 'USER';
 
     const newPortfolioItem = new Portfolio({
       signalId,
@@ -40,6 +48,7 @@ export async function POST(request: Request) {
       currentPrice: entry, // Initial currentPrice is entryPrice
       currentPnL: 0,
       status: 'ACTIVE',
+      portfolioType: pType,
       executedAt: new Date()
     });
 

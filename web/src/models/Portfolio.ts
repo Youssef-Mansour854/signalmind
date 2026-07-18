@@ -8,6 +8,7 @@ export interface IPortfolio extends Document {
   positionSize: number;
   quantity?: number;
   status: 'ACTIVE' | 'Hit TP' | 'Hit SL' | 'CLOSED';
+  portfolioType: 'SYSTEM' | 'USER';
   executedAt: Date;
   currentPrice?: number;
   currentPnL?: number;
@@ -33,6 +34,13 @@ const PortfolioSchema = new Schema<IPortfolio>(
       enum: ['ACTIVE', 'Hit TP', 'Hit SL', 'CLOSED'], 
       default: 'ACTIVE',
       index: true 
+    },
+    portfolioType: {
+      type: String,
+      enum: ['SYSTEM', 'USER'],
+      default: 'USER',
+      required: true,
+      index: true
     },
     executedAt: { type: Date, default: Date.now },
     currentPrice: { type: Number },
