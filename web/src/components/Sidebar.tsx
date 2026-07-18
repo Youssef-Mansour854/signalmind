@@ -64,7 +64,7 @@ export default function Sidebar() {
           <div className="mb-8 text-right">
             <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2 justify-start">
               <img src="/logo.svg" alt="SignalMind Logo" className="h-7 w-7 rounded" />
-              <span>سيجنال مايند</span>
+              <span dir="ltr" className="font-bold text-xl tracking-wide text-white">SignalMind</span>
             </h1>
             <p className="text-[9px] text-neutral-500 mt-1 font-mono uppercase tracking-wider">
               TERMINAL V2.0

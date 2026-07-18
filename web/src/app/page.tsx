@@ -211,8 +211,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Grid of 4 Widgets */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Grid of 4 Widgets (2x2 on desktop, 1 col on mobile) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
         {renderWidget('أقوى فرص اليوم', 'يومي', '/day-trades', '⚡')}
         {renderWidget('أقوى فرص الأسبوع', 'أسبوعي', '/swing-trades', '📅')}
         {renderWidget('ترشيحات الشهر', 'شهري', '/monthly-picks', '🌙')}
