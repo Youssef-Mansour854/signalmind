@@ -51,8 +51,8 @@ export default function Sidebar() {
 
       {/* Sidebar Container */}
       <aside 
-        className={`fixed top-0 bottom-0 left-0 z-40 w-64 bg-neutral-950 border-r border-neutral-900 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 
-        ${isOpen ? 'translate-x-0' : '-translate-x-0 max-md:-translate-x-full'} 
+        className={`fixed top-0 bottom-0 right-0 z-40 w-64 bg-neutral-950 border-l border-neutral-900 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 
+        ${isOpen ? 'translate-x-0' : 'max-md:translate-x-full'} 
         h-screen`}
         dir="rtl"
       >

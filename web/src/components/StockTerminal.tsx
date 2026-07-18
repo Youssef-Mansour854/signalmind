@@ -231,7 +231,7 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
             </div>
 
             {/* Segmented Signal Gauge Bar */}
-            <div className="flex w-full items-center dir-ltr">
+            <div className="flex w-full items-center">
               {['بيع قوي', 'بيع', 'انتظار', 'شراء', 'شراء قوي'].map((label, idx) => {
                 const activeIdx = signal.signalType === 'BUY'
                   ? (signal.signalStrength === 'قوية' ? 4 : 3)
@@ -246,12 +246,12 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                   <div
                     key={label}
                     className={`flex-1 py-1 text-center text-xs md:text-sm transition-all duration-150 ${
-                      isFirst ? 'rounded-l-md' : ''
-                    } ${isLast ? 'rounded-r-md' : ''} ${
+                      isFirst ? 'rounded-s-md' : ''
+                    } ${isLast ? 'rounded-e-md' : ''} ${
                       isActive
                         ? 'bg-white text-black font-bold py-1 text-center text-xs md:text-sm'
-                        : 'text-neutral-600 border-y border-r border-neutral-800 py-1 text-center text-xs md:text-sm'
-                    } ${isFirst && !isActive ? 'border-l border-neutral-800' : ''}`}
+                        : 'text-neutral-600 border-y border-e border-neutral-800 py-1 text-center text-xs md:text-sm'
+                    } ${isFirst && !isActive ? 'border-s border-neutral-800' : ''}`}
                   >
                     {label}
                   </div>
