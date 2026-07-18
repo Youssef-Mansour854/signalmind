@@ -27,11 +27,28 @@ interface Signal {
   };
 }
 
+interface PortfolioStats {
+  availableCash: number;
+  totalInvestedCost: number;
+  currentStocksValue: number;
+  totalPortfolioValue: number;
+  totalProfitLoss: number;
+  totalProfitLossPercentage: number;
+  activePositionsCount: number;
+}
+
 export default function DashboardPage() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketFilter, setMarketFilter] = useState<'EGX' | 'US'>('US');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Portfolio Stats State
+  const [portfolioStats, setPortfolioStats] = useState<PortfolioStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [isCashModalOpen, setIsCashModalOpen] = useState(false);
+  const [cashInput, setCashInput] = useState<string>('');
+  const [savingCash, setSavingCash] = useState(false);
 
   const fetchSignals = async () => {
     setLoading(true);
@@ -51,9 +68,52 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchPortfolioStats = async () => {
+    setStatsLoading(true);
+    try {
+      const res = await fetch('/api/portfolio/stats');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setPortfolioStats(json.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch portfolio stats:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchSignals();
+    fetchPortfolioStats();
+
+    // Auto poll stats every 30 seconds
+    const interval = setInterval(fetchPortfolioStats, 30000);
+    return () => clearInterval(interval);
   }, [marketFilter]);
+
+  const handleCashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCash(true);
+    try {
+      const res = await fetch('/api/portfolio/cash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ availableCash: Number(cashInput) }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setIsCashModalOpen(false);
+        fetchPortfolioStats();
+      } else {
+        alert(json.error || 'فشلت عملية حفظ السيولة المتاحة');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع');
+    } finally {
+      setSavingCash(false);
+    }
+  };
 
   const formatPrice = (price: number, market: string, symbol: string) => {
     const formatted = price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,6 +121,11 @@ export default function DashboardPage() {
       return `${formatted} ج.م`;
     }
     return `$${formatted}`;
+  };
+
+  const formatCurrency = (amount: number) => {
+    const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return marketFilter === 'EGX' ? `${formatted} ج.م` : `$${formatted}`;
   };
 
   const getWidgetSignals = (tf: string) => {
@@ -194,7 +259,10 @@ export default function DashboardPage() {
           </div>
 
           <button
-            onClick={fetchSignals}
+            onClick={() => {
+              fetchSignals();
+              fetchPortfolioStats();
+            }}
             className="p-1.5 border border-neutral-800 bg-neutral-900 text-neutral-400 hover:text-white rounded transition shrink-0"
             title="تحديث البيانات"
           >
@@ -202,6 +270,101 @@ export default function DashboardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.27 15" />
             </svg>
           </button>
+        </div>
+      </div>
+
+      {/* Live Portfolio Equity & Balance Banner */}
+      <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
+        <div className="flex items-center justify-between border-b border-neutral-900 pb-3 gap-2">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#ffffff] shrink-0" />
+            <h2 className="text-xs font-black uppercase tracking-wider text-neutral-400 font-mono">
+              [ لوحة تحكم المحفظة الحية / LIVE PORTFOLIO EQUITY ]
+            </h2>
+          </div>
+          <button
+            onClick={fetchPortfolioStats}
+            disabled={statsLoading}
+            className="text-[10px] font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shrink-0"
+            title="تحديث قيم المحفظة"
+          >
+            <span>مزامنة لحظية</span>
+            <svg className={`h-3 w-3 shrink-0 ${statsLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.27 15" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+          {/* Card 1: Total Portfolio Value */}
+          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+            <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+              القيمة الإجمالية للمحفظة 💰
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.totalPortfolioValue || 0)}
+            </span>
+            <span className="text-[9px] text-neutral-500 font-mono">
+              (السيولة + القيمة السوقية للأسهم)
+            </span>
+          </div>
+
+          {/* Card 2: Available Cash */}
+          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase">
+                السيولة المتاحة (Cash) 💳
+              </span>
+              <button
+                onClick={() => {
+                  setCashInput(String(portfolioStats?.availableCash || 100000));
+                  setIsCashModalOpen(true);
+                }}
+                className="text-[9px] font-bold text-neutral-400 hover:text-white border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 rounded transition cursor-pointer"
+              >
+                [تعديل]
+              </button>
+            </div>
+            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.availableCash || 0)}
+            </span>
+            <span className="text-[9px] text-neutral-500 font-mono">
+              النقد المتاح للاستثمار
+            </span>
+          </div>
+
+          {/* Card 3: Total Invested Cost */}
+          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+            <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+              رأس المال المستثمر 📉
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+              {statsLoading && !portfolioStats ? '...' : formatCurrency(portfolioStats?.totalInvestedCost || 0)}
+            </span>
+            <span className="text-[9px] text-neutral-500 font-mono">
+              في {portfolioStats?.activePositionsCount || 0} مراكز مفتوحة
+            </span>
+          </div>
+
+          {/* Card 4: Total PnL */}
+          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+            <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+              إجمالي الأرباح/الخسائر ⚡
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
+              </span>
+              <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
+              </span>
+            </div>
+            <span className="text-[9px] text-neutral-500 font-mono">
+              الأداء اللحظي للمراكز
+            </span>
+          </div>
         </div>
       </div>
 
@@ -218,6 +381,49 @@ export default function DashboardPage() {
         {renderWidget('ترشيحات الشهر', 'شهري', '/monthly-picks', '🌙')}
         {renderWidget('أفضل استثمارات العام', 'استثمار سنوي', '/annual-investments', '🏢')}
       </div>
+
+      {/* Edit Cash Modal */}
+      {isCashModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" dir="rtl">
+          <div className="bg-neutral-950 border border-neutral-900 p-6 rounded-lg w-full max-w-md space-y-6 text-right">
+            <div>
+              <h3 className="text-base font-black text-white">تعديل السيولة المتاحة (Available Cash)</h3>
+              <p className="text-[10px] text-neutral-500 font-mono mt-1">أدخل المبلغ المستهدف المحفوظ بالسيولة النقديّة</p>
+            </div>
+
+            <form onSubmit={handleCashSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">المبلغ المتاح النقدي</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={cashInput}
+                  onChange={(e) => setCashInput(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingCash}
+                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition disabled:opacity-40 cursor-pointer"
+                >
+                  {savingCash ? 'جاري الحفظ...' : 'حفظ'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCashModalOpen(false)}
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
