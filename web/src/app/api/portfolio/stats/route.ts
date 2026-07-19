@@ -37,6 +37,27 @@ export async function GET(request: Request) {
       activeFilter.executedAt = { $gte: startDate };
     }
     const activePositions = await Portfolio.find(activeFilter).populate('signalId');
+ 
+    if (!activePositions || activePositions.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          portfolioType: type,
+          timeframe,
+          availableCash,
+          totalInvestedCost: 0,
+          currentStocksValue: 0,
+          realizedPnL: 0,
+          unrealizedPnL: 0,
+          totalPortfolioValue: availableCash || 0,
+          totalProfitLoss: 0,
+          totalProfitLossPercentage: 0,
+          activePositionsCount: 0,
+          closedPositionsCount: 0,
+          positions: []
+        }
+      });
+    }
 
     // 3. Fetch closed positions for realized PnL within timeframe
     const closedFilter: any = { status: 'CLOSED', portfolioType: type };
@@ -130,7 +151,22 @@ export async function GET(request: Request) {
         positions: positionsDetail,
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching portfolio stats:", error);
+    return NextResponse.json({
+      success: false,
+      error: "Internal Server Error",
+      data: {
+        totalPortfolioValue: 100000,
+        availableCash: 100000,
+        totalInvestedCost: 0,
+        totalProfitLoss: 0,
+        totalProfitLossPercentage: 0,
+        activePositionsCount: 0,
+        closedPositionsCount: 0,
+        positions: []
+      }
+    }, { status: 500 });
   }
 }

@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const [portfolioType, setPortfolioType] = useState<'USER' | 'SYSTEM'>('USER');
   const [timeframe, setTimeframe] = useState<'1d' | '1w' | '3m' | '6m' | '1y' | 'all'>('all');
   const [portfolioStats, setPortfolioStats] = useState<PortfolioStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const [cashInput, setCashInput] = useState<string>('');
   const [savingCash, setSavingCash] = useState(false);
@@ -74,6 +74,15 @@ export default function DashboardPage() {
     setStatsLoading(true);
     try {
       const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}`);
+      if (!res.ok) {
+        console.error("API returned an error:", res.status);
+        return;
+      }
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("API returned non-JSON response");
+        return;
+      }
       const json = await res.json();
       if (json.success && json.data) {
         setPortfolioStats(json.data);
@@ -308,7 +317,7 @@ export default function DashboardPage() {
 
             <button
               onClick={() => fetchPortfolioStats(portfolioType, timeframe)}
-              disabled={statsLoading}
+              disabled={!!statsLoading}
               className="text-[10px] font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white px-2.5 py-1 rounded transition flex items-center gap-1 cursor-pointer disabled:opacity-40 shrink-0"
               title="تحديث قيم المحفظة"
             >
