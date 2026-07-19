@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
+import Portfolio from '@/models/Portfolio';
 
 // GET /api/signals - Retrieve signals
 export async function GET(request: Request) {
@@ -40,13 +41,44 @@ export async function GET(request: Request) {
       .skip(skip)
       .limit(limit);
 
+    // Map each signal and join with associated closed Portfolio items to subtract brokerFees
+    const signalsWithNetPnL = await Promise.all(signals.map(async (s) => {
+      const portItem = await Portfolio.findOne({ signalId: s._id, status: 'CLOSED' });
+      if (portItem && portItem.brokerFees > 0) {
+        const fees = portItem.brokerFees;
+        const entry = portItem.actualEntryPrice;
+        const qty = portItem.quantity || 0;
+        const size = portItem.positionSize;
+        
+        let sumPartials = 0;
+        if (portItem.scalingHistory && portItem.scalingHistory.length > 0) {
+          for (const tx of portItem.scalingHistory) {
+            if (tx.type === 'PARTIAL_CLOSE' && tx.realizedPnL !== undefined) {
+              sumPartials += tx.realizedPnL;
+            }
+          }
+        }
+        
+        const grossPnL = sumPartials > 0 ? sumPartials : (portItem.exitPrice! - entry) * qty;
+        const netPnL = grossPnL - fees;
+        const initialSize = size > 0 ? size : 1000;
+        const netPnLPct = (netPnL / initialSize) * 100;
+        
+        const signalObj = s.toObject();
+        signalObj.pnlPercentage = Number(netPnLPct.toFixed(2));
+        signalObj.brokerFees = fees;
+        return signalObj;
+      }
+      return s;
+    }));
+
     return NextResponse.json({ 
       success: true, 
-      count: signals.length, 
+      count: signalsWithNetPnL.length, 
       total, 
       page, 
       totalPages: Math.ceil(total / limit),
-      data: signals 
+      data: signalsWithNetPnL 
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

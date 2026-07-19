@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     const cashKey = `availableCash_${type}`;
     const cashDoc = await Setting.findOne({ key: cashKey });
     const availableCash = cashDoc && typeof cashDoc.value === 'number' ? cashDoc.value : 100000;
+    const totalDeposits = cashDoc && typeof cashDoc.totalDeposits === 'number' && cashDoc.totalDeposits > 0 ? cashDoc.totalDeposits : availableCash;
 
     // 2. Fetch active portfolio positions for type and optional date range
     const activeFilter: any = { status: 'ACTIVE', portfolioType: type };
@@ -128,10 +129,21 @@ export async function GET(request: Request) {
       };
     });
 
+    let totalFees = 0;
+    for (const pos of activePositions) {
+      totalFees += (pos.brokerFees || 0);
+    }
+    for (const cp of closedPositions) {
+      totalFees += (cp.brokerFees || 0);
+    }
+
     const unrealizedPnL = currentStocksValue - totalInvestedCost;
-    const totalProfitLoss = unrealizedPnL + realizedPnL;
+    const totalProfitLoss = unrealizedPnL + realizedPnL - totalFees;
     const totalPortfolioValue = availableCash + currentStocksValue + realizedPnL;
-    const totalProfitLossPercentage = totalInvestedCost > 0 ? (totalProfitLoss / totalInvestedCost) * 100 : 0;
+    
+    // Net ROI % = ((realizedPnL - totalFees) / totalDeposits) * 100
+    const netRealizedPnL = realizedPnL - totalFees;
+    const totalProfitLossPercentage = totalDeposits > 0 ? (netRealizedPnL / totalDeposits) * 100 : 0;
 
     return NextResponse.json({
       success: true,

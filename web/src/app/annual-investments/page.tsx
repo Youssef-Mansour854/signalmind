@@ -45,6 +45,7 @@ interface PortfolioItem {
   finalPnL?: number;
   pnlPercentage?: number;
   closeReason?: string;
+  brokerFees?: number;
 }
 
 export default function AnnualInvestmentsPage() {
@@ -65,6 +66,13 @@ export default function AnnualInvestmentsPage() {
   const [selectedPortfolioItem, setSelectedPortfolioItem] = useState<PortfolioItem | null>(null);
   const [exitPrice, setExitPrice] = useState<number>(0);
   const [closeReason, setCloseReason] = useState<string>('Manual Close');
+
+  // Scale Modal State
+  const [isScaleModalOpen, setIsScaleModalOpen] = useState(false);
+  const [scaleAction, setScaleAction] = useState<'BUY_MORE' | 'PARTIAL_CLOSE'>('BUY_MORE');
+  const [scalePrice, setScalePrice] = useState<number>(0);
+  const [scaleQty, setScaleQty] = useState<string>('');
+  const [scaleFees, setScaleFees] = useState<string>('0');
 
   const fetchData = async () => {
     setLoading(true);
@@ -145,6 +153,37 @@ export default function AnnualInvestmentsPage() {
         fetchData();
       } else {
         alert(json.error || 'فشل إغلاق الصفقة');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع');
+    }
+  };
+
+  const handleScaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPortfolioItem) return;
+
+    try {
+      const res = await fetch('/api/portfolio/scale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedPortfolioItem._id,
+          scaleAction,
+          price: scalePrice,
+          quantity: Number(scaleQty),
+          fees: Number(scaleFees)
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setIsScaleModalOpen(false);
+        setScaleQty('');
+        setScaleFees('0');
+        fetchData();
+      } else {
+        alert(json.error || 'فشلت عملية تعديل الكمية');
       }
     } catch (err: any) {
       alert(err.message || 'حدث خطأ غير متوقع');
@@ -255,8 +294,10 @@ export default function AnnualInvestmentsPage() {
                 <tr className="border-b border-neutral-900 bg-neutral-900/40 text-neutral-300 font-bold font-sans">
                   <th className="p-4">الرمز</th>
                   <th className="p-4">سعر الدخول الفعلي</th>
+                  <th className="p-4">الكمية</th>
                   <th className="p-4">السعر الحالي</th>
                   <th className="p-4">القيمة المستثمرة</th>
+                  <th className="p-4">الرسوم</th>
                   <th className="p-4">الربح/الخسارة</th>
                   <th className="p-4">التاريخ</th>
                   <th className="p-4 text-center">الإجراء</th>
@@ -283,11 +324,17 @@ export default function AnnualInvestmentsPage() {
                       <td className="p-4 text-neutral-350 font-mono">
                         {formatPrice(item.actualEntryPrice, item.market, item.symbol)}
                       </td>
+                      <td className="p-4 text-neutral-350 font-mono">
+                        {item.quantity || 0}
+                      </td>
                       <td className="p-4 text-neutral-100 font-mono">
                         {formatPrice(current, item.market, item.symbol)}
                       </td>
                       <td className="p-4 text-neutral-200 font-mono">
                         {formatPrice(item.positionSize, item.market, item.symbol)}
+                      </td>
+                      <td className="p-4 text-neutral-350 font-mono">
+                        {formatPrice(item.brokerFees || 0, item.market, item.symbol)}
                       </td>
                       <td className={`p-4 font-bold font-mono ${pnl >= 0 ? 'text-white' : 'text-neutral-500'}`}>
                         {formatPrice(pnl, item.market, item.symbol)}{' '}
@@ -298,17 +345,32 @@ export default function AnnualInvestmentsPage() {
                       </td>
                       <td className="p-4 text-neutral-500 font-mono">{formatDate(item.executedAt)}</td>
                       <td className="p-4 text-center">
-                        <button
-                          onClick={() => {
-                            setSelectedPortfolioItem(item);
-                            setExitPrice(current || item.actualEntryPrice);
-                            setCloseReason('Manual Close');
-                            setIsCloseModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 text-[10px] border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white font-bold rounded cursor-pointer transition"
-                        >
-                          إغلاق الصفقة
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedPortfolioItem(item);
+                              setScalePrice(current || item.actualEntryPrice);
+                              setScaleAction('BUY_MORE');
+                              setScaleQty('');
+                              setScaleFees('0');
+                              setIsScaleModalOpen(true);
+                            }}
+                            className="px-2.5 py-1.5 text-[10px] border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white font-bold rounded cursor-pointer transition"
+                          >
+                            تعديل الكمية
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedPortfolioItem(item);
+                              setExitPrice(current || item.actualEntryPrice);
+                              setCloseReason('Manual Close');
+                              setIsCloseModalOpen(true);
+                            }}
+                            className="px-2.5 py-1.5 text-[10px] border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-350 hover:text-white font-bold rounded cursor-pointer transition"
+                          >
+                            إغلاق الصفقة
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -509,14 +571,118 @@ export default function AnnualInvestmentsPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition"
+                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition cursor-pointer"
                 >
                   إغلاق الصفقة
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsCloseModalOpen(false)}
-                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition"
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scale Position Modal */}
+      {isScaleModalOpen && selectedPortfolioItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" dir="rtl">
+          <div className="bg-neutral-950 border border-neutral-900 p-6 rounded-lg w-full max-w-md space-y-6 text-right">
+            <div>
+              <h3 className="text-base font-black text-white">تعديل كمية الصفقة / Scale Position</h3>
+              <p className="text-[10px] text-neutral-500 font-mono mt-1">سهم: {selectedPortfolioItem.symbol} | الكمية الحالية: {selectedPortfolioItem.quantity || 0}</p>
+            </div>
+
+            <form onSubmit={handleScaleSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">نوع الحركة</label>
+                <select
+                  value={scaleAction}
+                  onChange={(e) => {
+                    setScaleAction(e.target.value as 'BUY_MORE' | 'PARTIAL_CLOSE');
+                    setScaleQty('');
+                  }}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
+                >
+                  <option value="BUY_MORE">شراء إضافي (Scale In / Buy More)</option>
+                  <option value="PARTIAL_CLOSE">إغلاق جزئي (Scale Out / Partial Close)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">سعر التنفيذ</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={scalePrice}
+                  onChange={(e) => setScalePrice(Number(e.target.value))}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase font-bold text-neutral-450 block">الكمية</label>
+                  {scaleAction === 'PARTIAL_CLOSE' && (
+                    <div className="flex gap-1.5">
+                      {[0.25, 0.5, 0.75, 1.0].map((preset) => {
+                        const label = preset === 1.0 ? 'كل الصفقة' : `${preset * 100}%`;
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              const calcQty = (selectedPortfolioItem.quantity || 0) * preset;
+                              setScaleQty(String(Number(calcQty.toFixed(4))));
+                            }}
+                            className="text-[9px] bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white px-1.5 py-0.5 rounded cursor-pointer transition"
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  value={scaleQty}
+                  onChange={(e) => setScaleQty(e.target.value)}
+                  placeholder="أدخل الكمية بالأسهم..."
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">الرسوم (Fees)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={scaleFees}
+                  onChange={(e) => setScaleFees(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition cursor-pointer"
+                >
+                  تأكيد التعديل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsScaleModalOpen(false)}
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition cursor-pointer"
                 >
                   إلغاء
                 </button>

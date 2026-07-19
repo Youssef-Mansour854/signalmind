@@ -45,6 +45,7 @@ interface PortfolioItem {
   finalPnL?: number;
   pnlPercentage?: number;
   closeReason?: string;
+  brokerFees?: number;
 }
 
 interface StockTerminalProps {
@@ -67,6 +68,13 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [exitPrice, setExitPrice] = useState<number>(signal.currentPrice);
   const [closeReason, setCloseReason] = useState<string>('Manual Close');
+
+  // Scale Modal State
+  const [isScaleModalOpen, setIsScaleModalOpen] = useState(false);
+  const [scaleAction, setScaleAction] = useState<'BUY_MORE' | 'PARTIAL_CLOSE'>('BUY_MORE');
+  const [scalePrice, setScalePrice] = useState<number>(signal.currentPrice);
+  const [scaleQty, setScaleQty] = useState<string>('');
+  const [scaleFees, setScaleFees] = useState<string>('0');
 
   useEffect(() => {
     // TradingView Widget Injection
@@ -190,6 +198,40 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
         setPortfolioItem(null); // Clear active item
       } else {
         alert(json.error || 'فشل إغلاق الصفقة');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع');
+    }
+  };
+
+  const handleScaleSubmit = async (e: React.FormEvent) => {
+    if (!portfolioItem) return;
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/portfolio/scale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: portfolioItem._id,
+          scaleAction,
+          price: scalePrice,
+          quantity: Number(scaleQty),
+          fees: Number(scaleFees),
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setIsScaleModalOpen(false);
+        setScaleQty('');
+        setScaleFees('0');
+        if (json.data.status === 'CLOSED') {
+          setPortfolioItem(null);
+        } else {
+          setPortfolioItem(json.data);
+        }
+      } else {
+        alert(json.error || 'فشلت عملية تعديل الكمية');
       }
     } catch (err: any) {
       alert(err.message || 'حدث خطأ غير متوقع');
@@ -341,22 +383,44 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                   <span className="text-white font-bold">{formatPrice(portfolioItem.actualEntryPrice)}</span>
                 </div>
                 <div>
+                  <span className="text-neutral-500 block">الكمية الحالية:</span>
+                  <span className="text-white font-bold">{portfolioItem.quantity || 0}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-500 block">رسوم التداول:</span>
+                  <span className="text-white font-bold">{formatPrice(portfolioItem.brokerFees || 0)}</span>
+                </div>
+                <div>
                   <span className="text-neutral-500 block">الأرباح/الخسائر:</span>
                   <span className={`font-bold ${pnlPct >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
                     {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setExitPrice(signal.currentPrice);
-                  setCloseReason('Manual Close');
-                  setIsCloseModalOpen(true);
-                }}
-                className="w-full py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-805 text-neutral-300 hover:text-white transition rounded cursor-pointer"
-              >
-                إغلاق الصفقة
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setScalePrice(signal.currentPrice);
+                    setScaleAction('BUY_MORE');
+                    setScaleQty('');
+                    setScaleFees('0');
+                    setIsScaleModalOpen(true);
+                  }}
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-350 hover:text-white transition rounded cursor-pointer"
+                >
+                  تعديل الكمية
+                </button>
+                <button
+                  onClick={() => {
+                    setExitPrice(signal.currentPrice);
+                    setCloseReason('Manual Close');
+                    setIsCloseModalOpen(true);
+                  }}
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 hover:bg-neutral-800 text-neutral-350 hover:text-white transition rounded cursor-pointer"
+                >
+                  إغلاق الصفقة
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -479,6 +543,110 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                   type="button"
                   onClick={() => setIsCloseModalOpen(false)}
                   className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scale Position Modal */}
+      {isScaleModalOpen && portfolioItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" dir="rtl">
+          <div className="bg-neutral-950 border border-neutral-900 p-6 rounded-lg w-full max-w-md space-y-6 text-right">
+            <div>
+              <h3 className="text-base font-black text-white">تعديل كمية الصفقة / Scale Position</h3>
+              <p className="text-[10px] text-neutral-500 font-mono mt-1">سهم: {signal.symbol} | الكمية الحالية: {portfolioItem.quantity || 0}</p>
+            </div>
+
+            <form onSubmit={handleScaleSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">نوع الحركة</label>
+                <select
+                  value={scaleAction}
+                  onChange={(e) => {
+                    setScaleAction(e.target.value as 'BUY_MORE' | 'PARTIAL_CLOSE');
+                    setScaleQty('');
+                  }}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
+                >
+                  <option value="BUY_MORE">شراء إضافي (Scale In / Buy More)</option>
+                  <option value="PARTIAL_CLOSE">إغلاق جزئي (Scale Out / Partial Close)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">سعر التنفيذ</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={scalePrice}
+                  onChange={(e) => setScalePrice(Number(e.target.value))}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase font-bold text-neutral-450 block">الكمية</label>
+                  {scaleAction === 'PARTIAL_CLOSE' && (
+                    <div className="flex gap-1.5">
+                      {[0.25, 0.5, 0.75, 1.0].map((preset) => {
+                        const label = preset === 1.0 ? 'كل الصفقة' : `${preset * 100}%`;
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              const calcQty = (portfolioItem.quantity || 0) * preset;
+                              setScaleQty(String(Number(calcQty.toFixed(4))));
+                            }}
+                            className="text-[9px] bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white px-1.5 py-0.5 rounded cursor-pointer transition"
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  value={scaleQty}
+                  onChange={(e) => setScaleQty(e.target.value)}
+                  placeholder="أدخل الكمية بالأسهم..."
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">الرسوم (Fees)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={scaleFees}
+                  onChange={(e) => setScaleFees(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition cursor-pointer"
+                >
+                  تأكيد التعديل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsScaleModalOpen(false)}
+                  className="flex-1 py-2 text-xs font-bold border border-neutral-800 bg-neutral-900 text-neutral-450 hover:text-white rounded transition cursor-pointer"
                 >
                   إلغاء
                 </button>

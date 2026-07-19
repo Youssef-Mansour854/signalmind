@@ -50,6 +50,7 @@ export default function DashboardPage() {
   const [statsLoading, setStatsLoading] = useState<boolean>(false);
   const [isCashModalOpen, setIsCashModalOpen] = useState(false);
   const [cashInput, setCashInput] = useState<string>('');
+  const [cashAction, setCashAction] = useState<'DEPOSIT' | 'WITHDRAW'>('DEPOSIT');
   const [savingCash, setSavingCash] = useState(false);
 
   const fetchSignals = async () => {
@@ -110,14 +111,19 @@ export default function DashboardPage() {
       const res = await fetch('/api/portfolio/cash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availableCash: Number(cashInput), type: portfolioType }),
+        body: JSON.stringify({
+          action: cashAction,
+          amount: Number(cashInput),
+          type: portfolioType
+        }),
       });
       const json = await res.json();
       if (json.success) {
         setIsCashModalOpen(false);
+        setCashInput('');
         fetchPortfolioStats(portfolioType, timeframe);
       } else {
-        alert(json.error || 'فشلت عملية حفظ السيولة المتاحة');
+        alert(json.error || 'فشلت عملية إيداع/سحب السيولة');
       }
     } catch (err: any) {
       alert(err.message || 'حدث خطأ غير متوقع');
@@ -384,7 +390,8 @@ export default function DashboardPage() {
               {portfolioType === 'USER' && (
                 <button
                   onClick={() => {
-                    setCashInput(String(portfolioStats?.availableCash || 100000));
+                    setCashInput('');
+                    setCashAction('DEPOSIT');
                     setIsCashModalOpen(true);
                   }}
                   className="text-[9px] font-bold text-neutral-400 hover:text-white border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 rounded transition cursor-pointer"
@@ -467,19 +474,32 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" dir="rtl">
           <div className="bg-neutral-950 border border-neutral-900 p-6 rounded-lg w-full max-w-md space-y-6 text-right">
             <div>
-              <h3 className="text-base font-black text-white">تعديل السيولة المتاحة (Available Cash)</h3>
-              <p className="text-[10px] text-neutral-500 font-mono mt-1">أدخل المبلغ المستهدف المحفوظ بالسيولة النقديّة</p>
+              <h3 className="text-base font-black text-white">إيداع / سحب السيولة (Deposit / Withdraw Cash)</h3>
+              <p className="text-[10px] text-neutral-500 font-mono mt-1">تعديل السيولة الحالية عن طريق الإيداع أو السحب</p>
             </div>
 
             <form onSubmit={handleCashSubmit} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-neutral-450 block">المبلغ المتاح النقدي</label>
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">نوع العملية</label>
+                <select
+                  value={cashAction}
+                  onChange={(e) => setCashAction(e.target.value as 'DEPOSIT' | 'WITHDRAW')}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
+                >
+                  <option value="DEPOSIT">إيداع رأس مال (+) / Deposit</option>
+                  <option value="WITHDRAW">سحب رأس مال (-) / Withdraw</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">مبلغ العملية</label>
                 <input
                   type="number"
                   step="any"
                   value={cashInput}
                   onChange={(e) => setCashInput(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  placeholder="أدخل المبلغ..."
                   required
                 />
               </div>
@@ -490,7 +510,7 @@ export default function DashboardPage() {
                   disabled={savingCash}
                   className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition disabled:opacity-40 cursor-pointer"
                 >
-                  {savingCash ? 'جاري الحفظ...' : 'حفظ'}
+                  {savingCash ? 'جاري الحفظ...' : 'تأكيد العملية'}
                 </button>
                 <button
                   type="button"

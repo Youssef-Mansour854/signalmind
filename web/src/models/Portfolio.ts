@@ -1,5 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IScalingTransaction {
+  type: 'BUY_MORE' | 'PARTIAL_CLOSE';
+  quantity: number;
+  price: number;
+  fees: number;
+  realizedPnL?: number;
+  executedAt: Date;
+}
+
 export interface IPortfolio extends Document {
   signalId: mongoose.Types.ObjectId | string;
   symbol: string;
@@ -19,6 +28,8 @@ export interface IPortfolio extends Document {
   finalPnL?: number;
   pnlPercentage?: number;
   closeReason?: string;
+  brokerFees: number;
+  scalingHistory: IScalingTransaction[];
 }
 
 const PortfolioSchema = new Schema<IPortfolio>(
@@ -51,7 +62,9 @@ const PortfolioSchema = new Schema<IPortfolio>(
     closedAt: { type: Date },
     finalPnL: { type: Number },
     pnlPercentage: { type: Number },
-    closeReason: { type: String }
+    closeReason: { type: String },
+    brokerFees: { type: Number, default: 0 },
+    scalingHistory: { type: Schema.Types.Mixed, default: [] }
   },
   { timestamps: true, collection: 'user_portfolio' }
 );
