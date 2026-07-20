@@ -178,6 +178,8 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
     };
   }, [signal.symbol, signal.market]);
 
+  const [selectedTimeframe, setSelectedTimeframe] = useState<'DAY' | 'WEEK' | 'MONTH' | 'YEAR'>('DAY');
+
   const handleLiveScan = async () => {
     setIsAnalyzing(true);
     try {
@@ -187,6 +189,7 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
         body: JSON.stringify({
           symbol: signal.symbol,
           market: signal.market,
+          timeframe: selectedTimeframe,
         }),
       });
 
@@ -429,24 +432,39 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
 
         {/* AI Analysis Panel */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
-          <div className="flex items-center justify-between border-b border-neutral-900 pb-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-900 pb-3 gap-3">
             <h3 className="text-xs font-black uppercase text-neutral-400 font-mono tracking-wider">[ التحليل الفني بالذكاء الاصطناعي ]</h3>
-            <button
-              onClick={handleLiveScan}
-              disabled={isAnalyzing}
-              className="text-[9px] font-bold bg-white text-black hover:bg-neutral-200 px-2 py-1 rounded transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1"
-            >
-              {isAnalyzing ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />
-                  <span>جاري التحليل...</span>
-                </>
-              ) : (
-                <>
-                  <span>تحديث التحليل اللحظي ⚡</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2 font-sans">
+              {/* Sleek Dropdown for Timeframe */}
+              <select
+                value={selectedTimeframe}
+                onChange={(e) => setSelectedTimeframe(e.target.value as any)}
+                disabled={isAnalyzing}
+                className="bg-neutral-900 border border-neutral-800 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-white cursor-pointer disabled:opacity-50 font-bold"
+              >
+                <option value="DAY">مضاربة يومية (DAY)</option>
+                <option value="WEEK">فرص أسبوعية (WEEK)</option>
+                <option value="MONTH">حصاد الشهر (MONTH)</option>
+                <option value="YEAR">استثمار العام (YEAR)</option>
+              </select>
+
+              <button
+                onClick={handleLiveScan}
+                disabled={isAnalyzing}
+                className="text-[9px] font-bold bg-white text-black hover:bg-neutral-200 px-2 py-1.5 rounded transition duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 shrink-0 font-sans"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-black animate-ping" />
+                    <span>جاري التحليل...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>تحديث التحليل اللحظي ⚡</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
           <p className="text-xs leading-relaxed text-neutral-300 font-light font-sans whitespace-pre-wrap">
             {signal.explanationArabic}

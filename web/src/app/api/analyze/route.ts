@@ -10,7 +10,7 @@ import '@/models/Signal'; // Registry safety
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { symbol, market } = body;
+    const { symbol, market, timeframe } = body;
 
     if (!symbol || !market) {
       return NextResponse.json({ success: false, error: 'برجاء تزويد الرمز والسوق المطلوبة.' }, { status: 400 });
@@ -76,6 +76,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'GROQ_API_KEYS أو GROQ_API_KEY غير معرّف في خادم الويب.' }, { status: 500 });
     }
 
+    const tfMapping: Record<string, string> = {
+      'DAY': 'يومي',
+      'WEEK': 'أسبوعي',
+      'MONTH': 'شهري',
+      'YEAR': 'استثمار سنوي'
+    };
+    const targetTimeframe = tfMapping[timeframe] || 'يومي';
+
+    let timeframePromptContext = 'هذه التوصية مخصصة لمضاربة يومية سريعة (DAY). ركز على مستويات الدعم والمقاومة اللحظية/اليومية القريبة جداً وقم بحساب الأهداف (TP/SL) بحيث تكون ملائمة لتداول سريع في غضون ساعات أو أيام قليلة.';
+    if (timeframe === 'WEEK') {
+      timeframePromptContext = 'هذه التوصية مخصصة لصفقات أسبوعية متأرجحة (WEEK / Swing Trades). ركز على الاتجاه العام للسهم خلال الأسابيع القادمة والمقاومات والدعوم الرئيسية الأسبوعية، وقم بحساب الأهداف (TP/SL) لتكون ملائمة لمدى زمني يمتد لعدة أسابيع.';
+    } else if (timeframe === 'MONTH') {
+      timeframePromptContext = 'هذه التوصية مخصصة لصفقات استثمارية متوسطة الأجل (MONTH / Monthly Picks). ركز على الاتجاه على المدى المتوسط، وقم بحساب الأهداف (TP/SL) لتناسب مدى زمني يمتد لعدة أشهر.';
+    } else if (timeframe === 'YEAR') {
+      timeframePromptContext = 'هذه التوصية مخصصة للاستثمار طويل الأجل (YEAR / Annual Investments). ركز على متانة السهم ومستويات الدخول الاستراتيجية بعيدة المدى، وقم بحساب الأهداف (TP/SL) لتناسب مدى زمني يمتد لعام كامل أو أكثر.';
+    }
+
     const prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي. 
 قم بتحليل البيانات الفنية الحالية لسهم ${symbol} (سوق: ${market}) واكتب توصية تداول دقيقة باللغة العربية بناءً على المعطيات التالية:
 - السعر الحالي: ${latestPrice.toFixed(2)}
@@ -83,6 +100,9 @@ export async function POST(request: Request) {
 - مؤشر MACD Line: ${latestMACD.MACD?.toFixed(4) || '0.00'}
 - مؤشر MACD Signal: ${latestMACD.signal?.toFixed(4) || '0.00'}
 - مؤشر MACD Histogram: ${latestMACD.histogram?.toFixed(4) || '0.00'}
+
+سياق التوصية والمدى الزمني المطلوب:
+${timeframePromptContext}
 
 يجب أن تقوم بالرد بصيغة JSON فقط دون أي نصوص أو تعليقات خارج الـ JSON. 
 يجب أن تحتوي صيغة الـ JSON على الحقول التالية بدقة:
@@ -93,7 +113,7 @@ export async function POST(request: Request) {
   "takeProfit": number (سعر الهدف المقترح لجني الأرباح بدقة),
   "aiConfidence": "High" | "Medium" | "Low",
   "aiRisk": "High" | "Medium" | "Low",
-  "timeframe": "يومي" | "أسبوعي" | "شهري" | "استثمار سنوي",
+  "timeframe": "${targetTimeframe}",
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني مختصر ومقنع باللغة العربية يشرح سبب اتخاذ هذا القرار الفني بالاعتماد على المؤشرات المذكورة (RSI, MACD) ومستويات الدعم والمقاومة"
 }`;
@@ -154,7 +174,7 @@ export async function POST(request: Request) {
           status: 'Active', // Reset to Active upon live update
           aiConfidence: parsed.aiConfidence || 'Medium',
           aiRisk: parsed.aiRisk || 'Medium',
-          timeframe: parsed.timeframe || 'يومي',
+          timeframe: targetTimeframe,
           signalStrength: parsed.signalStrength || 'متوسطة',
           explanationArabic: parsed.explanationArabic || 'تم تحديث التحليل الفني بنجاح.',
           indicators: {
