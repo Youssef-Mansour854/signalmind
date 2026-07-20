@@ -63,6 +63,26 @@ export default function HistoryPage() {
     disciplineRate: 100,
   });
 
+  const [accountMode, setAccountMode] = useState<'PERSONAL' | 'FUNDED'>('PERSONAL');
+
+  useEffect(() => {
+    const syncMode = () => {
+      const saved = localStorage.getItem('accountMode');
+      if (saved === 'PERSONAL' || saved === 'FUNDED') {
+        setAccountMode(saved);
+      }
+    };
+    syncMode();
+    window.addEventListener('accountModeChanged', syncMode);
+    return () => window.removeEventListener('accountModeChanged', syncMode);
+  }, []);
+
+  const handleAccountModeChange = (mode: 'PERSONAL' | 'FUNDED') => {
+    setAccountMode(mode);
+    localStorage.setItem('accountMode', mode);
+    window.dispatchEvent(new Event('accountModeChanged'));
+  };
+
   const getStatusQueryVal = (tab: string) => {
     if (tab === 'wins') return 'Win';
     if (tab === 'losses') return 'Loss';
@@ -262,28 +282,51 @@ export default function HistoryPage() {
         </div>
 
         {/* Market Selector */}
-        <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800 self-end md:self-auto">
-          <button
-            onClick={() => handleMarketChange('EGX')}
-            className={`px-4 py-1 text-xs font-bold transition rounded-sm ${
-              marketFilter === 'EGX' ? 'bg-white text-black' : 'text-neutral-450 hover:text-white'
-            }`}
-          >
-            EGX
-          </button>
-          <button
-            onClick={() => handleMarketChange('US')}
-            className={`px-4 py-1 text-xs font-bold transition rounded-sm ${
-              marketFilter === 'US' ? 'bg-white text-black' : 'text-neutral-450 hover:text-white'
-            }`}
-          >
-            US
-          </button>
+        <div className="flex items-center gap-3 self-end md:self-auto flex-wrap md:flex-nowrap">
+          {/* Account Mode Toggle Switch */}
+          <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
+            <button
+              onClick={() => handleAccountModeChange('PERSONAL')}
+              className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                accountMode === 'PERSONAL' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              حساب شخصي 👤
+            </button>
+            <button
+              onClick={() => handleAccountModeChange('FUNDED')}
+              className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                accountMode === 'FUNDED' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              حساب ممول 🏆
+            </button>
+          </div>
+
+          {/* Market Selector */}
+          <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
+            <button
+              onClick={() => handleMarketChange('EGX')}
+              className={`px-4 py-1 text-xs font-bold transition rounded-sm ${
+                marketFilter === 'EGX' ? 'bg-white text-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              EGX
+            </button>
+            <button
+              onClick={() => handleMarketChange('US')}
+              className={`px-4 py-1 text-xs font-bold transition rounded-sm ${
+                marketFilter === 'US' ? 'bg-white text-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              US
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Top Performance Banner */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className={`grid gap-4 ${accountMode === 'FUNDED' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
         {/* Win Rate */}
         <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
           <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">WIN RATE / نسبة النجاح</span>
@@ -311,10 +354,12 @@ export default function HistoryPage() {
         </div>
 
         {/* Discipline Rate */}
-        <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
-          <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">DISCIPLINE RATE / نسبة الانضباط 🎯</span>
-          <span className={`text-2xl font-black mt-2 block font-mono ${stats.disciplineRate >= 80 ? 'text-emerald-400' : stats.disciplineRate >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>{stats.disciplineRate}%</span>
-        </div>
+        {accountMode === 'FUNDED' && (
+          <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
+            <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">DISCIPLINE RATE / نسبة الانضباط 🎯</span>
+            <span className={`text-2xl font-black mt-2 block font-mono ${stats.disciplineRate >= 80 ? 'text-emerald-400' : stats.disciplineRate >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>{stats.disciplineRate}%</span>
+          </div>
+        )}
       </div>
 
       {/* Tab Switcher */}
@@ -364,7 +409,7 @@ export default function HistoryPage() {
                   <th className="p-4">السهم والقوة والمدى</th>
                   <th className="p-4">سعر التنفيذ (دخول &larr; خروج)</th>
                   <th className="p-4">النتيجة (PnL)</th>
-                  <th className="p-4">جودة الإعداد</th>
+                  {accountMode === 'FUNDED' && <th className="p-4">جودة الإعداد</th>}
                   <th className="p-4">سبب الإغلاق</th>
                   <th className="p-4">مدة الصفقة</th>
                   <th className="p-4 text-left">تاريخ التوصية</th>
@@ -412,23 +457,25 @@ export default function HistoryPage() {
                       </td>
 
                       {/* Setup Quality Badge */}
-                      <td className="p-4 font-sans text-xs">
-                        {trade.setupQuality ? (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            trade.setupQuality === 'A+'
-                              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
-                              : trade.setupQuality === 'B'
-                              ? 'bg-blue-950/40 border-blue-500 text-blue-400'
-                              : trade.setupQuality === 'FOMO'
-                              ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
-                              : 'bg-red-950/40 border-red-500 text-red-500'
-                          }`}>
-                            {trade.setupQuality}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-600 font-mono">-</span>
-                        )}
-                      </td>
+                      {accountMode === 'FUNDED' && (
+                        <td className="p-4 font-sans text-xs">
+                          {trade.setupQuality ? (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              trade.setupQuality === 'A+'
+                                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
+                                : trade.setupQuality === 'B'
+                                ? 'bg-blue-950/40 border-blue-500 text-blue-400'
+                                : trade.setupQuality === 'FOMO'
+                                ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
+                                : 'bg-red-950/40 border-red-500 text-red-500'
+                            }`}>
+                              {trade.setupQuality}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-600 font-mono">-</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Close Reason */}
                       <td className="p-4 font-sans text-xs">
@@ -497,28 +544,30 @@ export default function HistoryPage() {
                       </span>
                     </div>
 
-                    <div>
-                      <span className={`block text-[9px] uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
-                        جودة الإعداد:
-                      </span>
-                      <span className="font-sans">
-                        {trade.setupQuality ? (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                            trade.setupQuality === 'A+'
-                              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
-                              : trade.setupQuality === 'B'
-                              ? 'bg-blue-950/40 border-blue-500 text-blue-450'
-                              : trade.setupQuality === 'FOMO'
-                              ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
-                              : 'bg-red-950/40 border-red-500 text-red-500'
-                          }`}>
-                            {trade.setupQuality}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-600 font-mono">-</span>
-                        )}
-                      </span>
-                    </div>
+                    {accountMode === 'FUNDED' && (
+                      <div>
+                        <span className={`block text-[9px] uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
+                          جودة الإعداد:
+                        </span>
+                        <span className="font-sans">
+                          {trade.setupQuality ? (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                              trade.setupQuality === 'A+'
+                                ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
+                                : trade.setupQuality === 'B'
+                                ? 'bg-blue-950/40 border-blue-500 text-blue-450'
+                                : trade.setupQuality === 'FOMO'
+                                ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
+                                : 'bg-red-950/40 border-red-500 text-red-500'
+                            }`}>
+                              {trade.setupQuality}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-600 font-mono">-</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
 
                     <div>
                       <span className={`block text-[9px] uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>

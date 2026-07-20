@@ -69,6 +69,26 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const [userStats, setUserStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState<boolean>(false);
 
+  const [accountMode, setAccountMode] = useState<'PERSONAL' | 'FUNDED'>('PERSONAL');
+
+  useEffect(() => {
+    const syncMode = () => {
+      const saved = localStorage.getItem('accountMode');
+      if (saved === 'PERSONAL' || saved === 'FUNDED') {
+        setAccountMode(saved);
+      }
+    };
+    syncMode();
+    window.addEventListener('accountModeChanged', syncMode);
+    return () => window.removeEventListener('accountModeChanged', syncMode);
+  }, []);
+
+  const handleAccountModeChange = (mode: 'PERSONAL' | 'FUNDED') => {
+    setAccountMode(mode);
+    localStorage.setItem('accountMode', mode);
+    window.dispatchEvent(new Event('accountModeChanged'));
+  };
+
   const fetchUserStats = async () => {
     setStatsLoading(true);
     try {
@@ -188,6 +208,10 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const handleExecuteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const isFunded = accountMode === 'FUNDED';
+      const size = isFunded ? calculatedPositionSize : Number(positionSize);
+      const qty = isFunded ? calculatedQty : (actualEntryPrice > 0 ? size / actualEntryPrice : 0);
+
       const res = await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,10 +220,10 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
           symbol: signal.symbol,
           market: signal.market,
           actualEntryPrice,
-          positionSize: calculatedPositionSize,
-          quantity: calculatedQty,
-          setupQuality,
-          initialStopLoss: stopLossPrice,
+          positionSize: size,
+          quantity: Number(qty.toFixed(4)),
+          setupQuality: isFunded ? setupQuality : undefined,
+          initialStopLoss: isFunded ? stopLossPrice : undefined,
           portfolioType: 'USER'
         }),
       });
@@ -303,6 +327,29 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
 
       {/* Details & Actions Panel Column */}
       <div className="w-full space-y-6">
+        {/* Account Mode Selector in Terminal */}
+        <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex items-center justify-between text-right">
+          <span className="text-xs font-bold text-white">وضع الحساب (Account Mode):</span>
+          <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
+            <button
+              onClick={() => handleAccountModeChange('PERSONAL')}
+              className={`px-3 py-1 text-[10px] font-bold transition rounded-sm ${
+                accountMode === 'PERSONAL' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              شخصي 👤
+            </button>
+            <button
+              onClick={() => handleAccountModeChange('FUNDED')}
+              className={`px-3 py-1 text-[10px] font-bold transition rounded-sm ${
+                accountMode === 'FUNDED' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+              }`}
+            >
+              ممول 🏆
+            </button>
+          </div>
+        </div>
+
         {/* Signal Meta Info Card */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
           <div className="border-b border-neutral-900 pb-4">
@@ -502,74 +549,90 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-neutral-450 block">نسبة المخاطرة (Risk %)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={riskPercentage}
-                  onChange={(e) => setRiskPercentage(Number(e.target.value))}
-                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
-                  min="0.01"
-                  max="100"
-                  required
-                />
-              </div>
+              {accountMode === 'FUNDED' ? (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-neutral-450 block">نسبة المخاطرة (Risk %)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={riskPercentage}
+                      onChange={(e) => setRiskPercentage(Number(e.target.value))}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                      min="0.01"
+                      max="100"
+                      required
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-neutral-450 block">سعر وقف الخسارة (Stop Loss)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={stopLossPrice}
-                  onChange={(e) => setStopLossPrice(Number(e.target.value))}
-                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
-                  required
-                />
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-neutral-450 block">سعر وقف الخسارة (Stop Loss)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={stopLossPrice}
+                      onChange={(e) => setStopLossPrice(Number(e.target.value))}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                      required
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-neutral-450 block">جودة الصفقة (Setup Quality)</label>
-                <select
-                  value={setupQuality}
-                  onChange={(e) => setSetupQuality(e.target.value as any)}
-                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
-                >
-                  <option value="A+">A+ (إعداد مثالي وعالي الجودة)</option>
-                  <option value="B">B (إعداد جيد)</option>
-                  <option value="FOMO">FOMO (دخول خوفاً من فوات الفرصة)</option>
-                  <option value="Revenge">Revenge (دخول انتقامي للتعويض)</option>
-                </select>
-              </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-neutral-450 block">جودة الصفقة (Setup Quality)</label>
+                    <select
+                      value={setupQuality}
+                      onChange={(e) => setSetupQuality(e.target.value as any)}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
+                    >
+                      <option value="A+">A+ (إعداد مثالي وعالي الجودة)</option>
+                      <option value="B">B (إعداد جيد)</option>
+                      <option value="FOMO">FOMO (دخول خوفاً من فوات الفرصة)</option>
+                      <option value="Revenge">Revenge (دخول انتقامي للتعويض)</option>
+                    </select>
+                  </div>
 
-              {/* Real-time Risk Sizing Details */}
-              <div className="p-3 bg-neutral-900/50 border border-neutral-900 rounded space-y-2 text-xs">
-                <div className="flex justify-between border-b border-neutral-900 pb-1.5 text-[10px] uppercase font-bold text-neutral-500">
-                  <span>المعايير المحسوبة</span>
-                  <span>الرقم والعملة</span>
+                  {/* Real-time Risk Sizing Details */}
+                  <div className="p-3 bg-neutral-900/50 border border-neutral-900 rounded space-y-2 text-xs">
+                    <div className="flex justify-between border-b border-neutral-900 pb-1.5 text-[10px] uppercase font-bold text-neutral-500">
+                      <span>المعايير المحسوبة</span>
+                      <span>الرقم والعملة</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span className="font-mono">{signal.market === 'EGX' ? `${totalPortfolioValue.toLocaleString()} ج.م` : `$${totalPortfolioValue.toLocaleString()}`}</span>
+                      <span>رأس مال الحساب:</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span className="font-mono">{signal.market === 'EGX' ? `${riskAmount.toLocaleString()} ج.م` : `$${riskAmount.toLocaleString()}`}</span>
+                      <span>قيمة المخاطرة المسموحة ({riskPercentage}%):</span>
+                    </div>
+                    <div className="flex justify-between text-white font-bold">
+                      <span className="font-mono text-emerald-400">{calculatedQty} سهم</span>
+                      <span>الكمية المقترحة للشراء:</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span className="font-mono">{signal.market === 'EGX' ? `${calculatedPositionSize.toLocaleString()} ج.م` : `$${calculatedPositionSize.toLocaleString()}`}</span>
+                      <span>تكلفة المركز الإجمالية:</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم المركز (القيمة المستثمرة)</label>
+                  <input
+                    type="number"
+                    placeholder={signal.market === 'EGX' ? 'القيمة بالجنيه المصري' : 'القيمة بالدولار'}
+                    value={positionSize}
+                    onChange={(e) => setPositionSize(e.target.value)}
+                    className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                    required
+                  />
                 </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span className="font-mono">{signal.market === 'EGX' ? `${totalPortfolioValue.toLocaleString()} ج.م` : `$${totalPortfolioValue.toLocaleString()}`}</span>
-                  <span>رأس مال الحساب:</span>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span className="font-mono">{signal.market === 'EGX' ? `${riskAmount.toLocaleString()} ج.م` : `$${riskAmount.toLocaleString()}`}</span>
-                  <span>قيمة المخاطرة المسموحة ({riskPercentage}%):</span>
-                </div>
-                <div className="flex justify-between text-white font-bold">
-                  <span className="font-mono text-emerald-450">{calculatedQty} سهم</span>
-                  <span>الكمية المقترحة للشراء:</span>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span className="font-mono">{signal.market === 'EGX' ? `${calculatedPositionSize.toLocaleString()} ج.م` : `$${calculatedPositionSize.toLocaleString()}`}</span>
-                  <span>تكلفة المركز الإجمالية:</span>
-                </div>
-              </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={calculatedQty <= 0 || statsLoading}
+                  disabled={accountMode === 'FUNDED' ? (calculatedQty <= 0 || statsLoading) : (!positionSize || Number(positionSize) <= 0)}
                   className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition disabled:opacity-40"
                 >
                   {statsLoading ? 'جاري التحميل...' : 'تأكيد التنفيذ'}

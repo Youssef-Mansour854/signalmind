@@ -59,26 +59,45 @@ export default function DashboardPage() {
   const [cashAction, setCashAction] = useState<'DEPOSIT' | 'WITHDRAW'>('DEPOSIT');
   const [savingCash, setSavingCash] = useState(false);
 
-  const dailyNear = !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit * 0.8);
-  const dailyHit = !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit);
-  const totalNear = !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit * 0.8);
-  const totalHit = !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit);
+  const [accountMode, setAccountMode] = useState<'PERSONAL' | 'FUNDED'>('PERSONAL');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('accountMode');
+    if (saved === 'PERSONAL' || saved === 'FUNDED') {
+      setAccountMode(saved);
+    }
+  }, []);
+
+  const handleAccountModeChange = (mode: 'PERSONAL' | 'FUNDED') => {
+    setAccountMode(mode);
+    localStorage.setItem('accountMode', mode);
+    // Trigger custom event to notify other components (e.g. StockTerminal, HistoryPageClient) on the same page
+    window.dispatchEvent(new Event('accountModeChanged'));
+  };
+
+  const showDrawdownAlerts = accountMode === 'FUNDED';
+  const dailyNear = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit * 0.8);
+  const dailyHit = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit);
+  const totalNear = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit * 0.8);
+  const totalHit = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit);
 
   let accentColorClass = 'bg-white';
   let accentTextClass = 'text-white';
   let accentBorderClass = 'border-neutral-900';
   let pulseShadowClass = 'shadow-[0_0_8px_#ffffff]';
 
-  if (dailyHit || totalHit) {
-    accentColorClass = 'bg-red-500';
-    accentTextClass = 'text-red-500';
-    accentBorderClass = 'border-red-900/60';
-    pulseShadowClass = 'shadow-[0_0_8px_#ef4444]';
-  } else if (dailyNear || totalNear) {
-    accentColorClass = 'bg-yellow-500';
-    accentTextClass = 'text-yellow-500';
-    accentBorderClass = 'border-yellow-900/60';
-    pulseShadowClass = 'shadow-[0_0_8px_#f59e0b]';
+  if (showDrawdownAlerts) {
+    if (dailyHit || totalHit) {
+      accentColorClass = 'bg-red-500';
+      accentTextClass = 'text-red-500';
+      accentBorderClass = 'border-red-900/60';
+      pulseShadowClass = 'shadow-[0_0_8px_#ef4444]';
+    } else if (dailyNear || totalNear) {
+      accentColorClass = 'bg-yellow-500';
+      accentTextClass = 'text-yellow-500';
+      accentBorderClass = 'border-yellow-900/60';
+      pulseShadowClass = 'shadow-[0_0_8px_#f59e0b]';
+    }
   }
 
   const fetchSignals = async () => {
@@ -328,7 +347,27 @@ export default function DashboardPage() {
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
+            {/* Account Mode Toggle Switch */}
+            <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
+              <button
+                onClick={() => handleAccountModeChange('PERSONAL')}
+                className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                  accountMode === 'PERSONAL' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+                }`}
+              >
+                حساب شخصي 👤
+              </button>
+              <button
+                onClick={() => handleAccountModeChange('FUNDED')}
+                className={`px-3 py-1 text-xs font-bold transition rounded-sm ${
+                  accountMode === 'FUNDED' ? 'bg-white text-black font-black' : 'text-neutral-450 hover:text-white'
+                }`}
+              >
+                حساب ممول 🏆
+              </button>
+            </div>
+
             {/* Dual Portfolio Toggle Switch */}
             <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
               <button
@@ -364,7 +403,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Drawdown Gauges */}
-        {portfolioStats && (
+        {accountMode === 'FUNDED' && portfolioStats && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-neutral-900 pb-4">
             {/* Daily Drawdown Gauge */}
             <div className="space-y-2">
@@ -476,7 +515,7 @@ export default function DashboardPage() {
               <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase">
                 السيولة المتاحة (Cash) 💳
               </span>
-              {portfolioType === 'USER' && (
+              {portfolioType === 'USER' && accountMode === 'PERSONAL' && (
                 <button
                   onClick={() => {
                     setCashInput('');
@@ -501,46 +540,82 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Card 3: Total Invested Cost */}
-          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
-            <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
-              رأس المال المستثمر 📉
-            </span>
-            {statsLoading ? (
-              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
-            ) : (
-              <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-                {formatCurrency(portfolioStats?.totalInvestedCost || 0)}
+          {/* Card 3: Total Invested Cost / Daily Start Equity */}
+          {accountMode === 'PERSONAL' ? (
+            <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+              <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+                رأس المال المستثمر 📉
               </span>
-            )}
-            <span className="text-[9px] text-neutral-500 font-mono">
-              في {portfolioStats?.activePositionsCount || 0} مراكز نشطة
-            </span>
-          </div>
+              {statsLoading ? (
+                <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+              ) : (
+                <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                  {formatCurrency(portfolioStats?.totalInvestedCost || 0)}
+                </span>
+              )}
+              <span className="text-[9px] text-neutral-500 font-mono">
+                في {portfolioStats?.activePositionsCount || 0} مراكز نشطة
+              </span>
+            </div>
+          ) : (
+            <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+              <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+                رأس مال بداية اليوم ⏱️
+              </span>
+              {statsLoading ? (
+                <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+              ) : (
+                <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                  {formatCurrency(portfolioStats?.dailyStartEquity || 0)}
+                </span>
+              )}
+              <span className="text-[9px] text-neutral-500 font-mono">
+                (المستهدَف لإعادة التعيين اليومي)
+              </span>
+            </div>
+          )}
 
-          {/* Card 4: Total PnL */}
-          <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
-            <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
-              إجمالي الأرباح/الخسائر ⚡
-            </span>
-            {statsLoading ? (
-              <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
-            ) : (
-              <div className="flex items-baseline gap-2">
-                <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
-                  {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
-                  {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
+          {/* Card 4: Total PnL / Trailing Peak */}
+          {accountMode === 'PERSONAL' ? (
+            <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+              <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+                إجمالي الأرباح/الخسائر ⚡
+              </span>
+              {statsLoading ? (
+                <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+              ) : (
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                    {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                    {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
+                  </span>
+                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                    ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                    {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
+                  </span>
+                </div>
+              )}
+              <span className="text-[9px] text-neutral-500 font-mono">
+                الأداء خلال الفترة المحددة
+              </span>
+            </div>
+          ) : (
+            <div className="border border-neutral-900 bg-neutral-900/30 p-4 rounded-lg flex flex-col justify-between space-y-2">
+              <span className="text-[10px] text-neutral-500 font-mono font-bold uppercase block">
+                أعلى قيمة مسجلة للمحفظة 🛡️
+              </span>
+              {statsLoading ? (
+                <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
+              ) : (
+                <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+                  {formatCurrency(portfolioStats?.peakEquity || 0)}
                 </span>
-                <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                  ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
-                  {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
-                </span>
-              </div>
-            )}
-            <span className="text-[9px] text-neutral-500 font-mono">
-              الأداء خلال الفترة المحددة
-            </span>
-          </div>
+              )}
+              <span className="text-[9px] text-neutral-500 font-mono">
+                (أعلى قمة لحساب التراجع التراكمي)
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
