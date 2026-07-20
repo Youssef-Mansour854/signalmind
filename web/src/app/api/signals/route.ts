@@ -41,11 +41,15 @@ export async function GET(request: Request) {
       .skip(skip)
       .limit(limit);
 
-    // Map each signal and join with associated closed Portfolio items to subtract brokerFees
+    // Map each signal and join with associated closed Portfolio items to subtract brokerFees and attach metadata
     const signalsWithNetPnL = await Promise.all(signals.map(async (s) => {
-      const portItem = await Portfolio.findOne({ signalId: s._id, status: 'CLOSED' });
-      if (portItem && portItem.brokerFees > 0) {
-        const fees = portItem.brokerFees;
+      const portItem = await Portfolio.findOne({ signalId: s._id, status: { $ne: 'ACTIVE' } });
+      const signalObj = s.toObject();
+      if (portItem) {
+        signalObj.setupQuality = portItem.setupQuality;
+        signalObj.initialStopLoss = portItem.initialStopLoss;
+        
+        const fees = portItem.brokerFees || 0;
         const entry = portItem.actualEntryPrice;
         const qty = portItem.quantity || 0;
         const size = portItem.positionSize;
@@ -59,17 +63,17 @@ export async function GET(request: Request) {
           }
         }
         
-        const grossPnL = sumPartials > 0 ? sumPartials : (portItem.exitPrice! - entry) * qty;
+        const exit = portItem.exitPrice !== undefined ? portItem.exitPrice : (portItem.currentPrice !== undefined ? portItem.currentPrice : entry);
+        const grossPnL = sumPartials > 0 ? sumPartials : (exit - entry) * qty;
         const netPnL = grossPnL - fees;
         const initialSize = size > 0 ? size : 1000;
         const netPnLPct = (netPnL / initialSize) * 100;
         
-        const signalObj = s.toObject();
         signalObj.pnlPercentage = Number(netPnLPct.toFixed(2));
         signalObj.brokerFees = fees;
         return signalObj;
       }
-      return s;
+      return signalObj;
     }));
 
     return NextResponse.json({ 

@@ -20,6 +20,8 @@ interface Signal {
   closedAt?: string;
   pnlPercentage?: number;
   closeReason?: string;
+  setupQuality?: 'A+' | 'B' | 'FOMO' | 'Revenge';
+  initialStopLoss?: number;
   scoreMetrics: {
     riskRewardRatio: number;
     confluenceScore: number;
@@ -35,6 +37,7 @@ interface StatsData {
   avgRRR: string;
   winsCount: number;
   lossesCount: number;
+  disciplineRate: number;
 }
 
 export default function HistoryPage() {
@@ -57,6 +60,7 @@ export default function HistoryPage() {
     avgRRR: '0.00',
     winsCount: 0,
     lossesCount: 0,
+    disciplineRate: 100,
   });
 
   const getStatusQueryVal = (tab: string) => {
@@ -95,13 +99,21 @@ export default function HistoryPage() {
         const avgRRR = rrrSignals.length > 0 
           ? (rrrSignals.reduce((acc: number, s: any) => acc + (s.scoreMetrics.riskRewardRatio || 0), 0) / rrrSignals.length).toFixed(2)
           : '0.00';
+
+        // Calculate Discipline Rate
+        const evaluatedTrades = closed.filter((s: any) => s.setupQuality !== undefined);
+        const disciplinedTrades = evaluatedTrades.filter((s: any) => s.setupQuality === 'A+' || s.setupQuality === 'B');
+        const disciplineRate = evaluatedTrades.length > 0
+          ? Math.round((disciplinedTrades.length / evaluatedTrades.length) * 100)
+          : 100;
           
         setStats({
           winRate,
           profitFactor,
           avgRRR,
           winsCount: totalWins,
-          lossesCount: totalLosses
+          lossesCount: totalLosses,
+          disciplineRate
         });
       }
     } catch (err) {
@@ -271,7 +283,7 @@ export default function HistoryPage() {
       </div>
 
       {/* Top Performance Banner */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Win Rate */}
         <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
           <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">WIN RATE / نسبة النجاح</span>
@@ -296,6 +308,12 @@ export default function HistoryPage() {
           <span className="text-2xl font-black text-white mt-2 block font-mono">
             {stats.winsCount} <span className="text-xs text-neutral-500 font-normal">Win</span> / {stats.lossesCount} <span className="text-xs text-neutral-500 font-normal">Loss</span>
           </span>
+        </div>
+
+        {/* Discipline Rate */}
+        <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
+          <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">DISCIPLINE RATE / نسبة الانضباط 🎯</span>
+          <span className={`text-2xl font-black mt-2 block font-mono ${stats.disciplineRate >= 80 ? 'text-emerald-400' : stats.disciplineRate >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>{stats.disciplineRate}%</span>
         </div>
       </div>
 
@@ -346,6 +364,7 @@ export default function HistoryPage() {
                   <th className="p-4">السهم والقوة والمدى</th>
                   <th className="p-4">سعر التنفيذ (دخول &larr; خروج)</th>
                   <th className="p-4">النتيجة (PnL)</th>
+                  <th className="p-4">جودة الإعداد</th>
                   <th className="p-4">سبب الإغلاق</th>
                   <th className="p-4">مدة الصفقة</th>
                   <th className="p-4 text-left">تاريخ التوصية</th>
@@ -390,6 +409,25 @@ export default function HistoryPage() {
                         isWin ? 'text-white font-black' : 'text-neutral-500 font-normal'
                       }`}>
                         {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%
+                      </td>
+
+                      {/* Setup Quality Badge */}
+                      <td className="p-4 font-sans text-xs">
+                        {trade.setupQuality ? (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            trade.setupQuality === 'A+'
+                              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
+                              : trade.setupQuality === 'B'
+                              ? 'bg-blue-950/40 border-blue-500 text-blue-400'
+                              : trade.setupQuality === 'FOMO'
+                              ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
+                              : 'bg-red-950/40 border-red-500 text-red-500'
+                          }`}>
+                            {trade.setupQuality}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-600 font-mono">-</span>
+                        )}
                       </td>
 
                       {/* Close Reason */}
@@ -456,6 +494,29 @@ export default function HistoryPage() {
                       </span>
                       <span className={`font-bold ${isWin ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
                         {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}%
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={`block text-[9px] uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
+                        جودة الإعداد:
+                      </span>
+                      <span className="font-sans">
+                        {trade.setupQuality ? (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                            trade.setupQuality === 'A+'
+                              ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400'
+                              : trade.setupQuality === 'B'
+                              ? 'bg-blue-950/40 border-blue-500 text-blue-450'
+                              : trade.setupQuality === 'FOMO'
+                              ? 'bg-yellow-950/40 border-yellow-500 text-yellow-500'
+                              : 'bg-red-950/40 border-red-500 text-red-500'
+                          }`}>
+                            {trade.setupQuality}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-600 font-mono">-</span>
+                        )}
                       </span>
                     </div>
 

@@ -35,6 +35,12 @@ interface PortfolioStats {
   totalProfitLoss: number;
   totalProfitLossPercentage: number;
   activePositionsCount: number;
+  maxDailyDrawdownLimit: number;
+  maxTotalDrawdownLimit: number;
+  currentDailyDrawdown: number;
+  currentTotalDrawdown: number;
+  dailyStartEquity: number;
+  peakEquity: number;
 }
 
 export default function DashboardPage() {
@@ -52,6 +58,28 @@ export default function DashboardPage() {
   const [cashInput, setCashInput] = useState<string>('');
   const [cashAction, setCashAction] = useState<'DEPOSIT' | 'WITHDRAW'>('DEPOSIT');
   const [savingCash, setSavingCash] = useState(false);
+
+  const dailyNear = !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit * 0.8);
+  const dailyHit = !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit);
+  const totalNear = !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit * 0.8);
+  const totalHit = !!(portfolioStats && portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit);
+
+  let accentColorClass = 'bg-white';
+  let accentTextClass = 'text-white';
+  let accentBorderClass = 'border-neutral-900';
+  let pulseShadowClass = 'shadow-[0_0_8px_#ffffff]';
+
+  if (dailyHit || totalHit) {
+    accentColorClass = 'bg-red-500';
+    accentTextClass = 'text-red-500';
+    accentBorderClass = 'border-red-900/60';
+    pulseShadowClass = 'shadow-[0_0_8px_#ef4444]';
+  } else if (dailyNear || totalNear) {
+    accentColorClass = 'bg-yellow-500';
+    accentTextClass = 'text-yellow-500';
+    accentBorderClass = 'border-yellow-900/60';
+    pulseShadowClass = 'shadow-[0_0_8px_#f59e0b]';
+  }
 
   const fetchSignals = async () => {
     setLoading(true);
@@ -291,10 +319,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Live Portfolio Equity & Balance Banner */}
-      <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4 text-right">
+      <div className={`border bg-neutral-950 p-6 rounded-lg space-y-4 text-right transition duration-300 ${accentBorderClass}`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-neutral-900 pb-4 gap-4">
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#ffffff] shrink-0" />
+            <span className={`h-2 w-2 rounded-full animate-pulse shrink-0 ${accentColorClass} ${pulseShadowClass}`} />
             <h2 className="text-xs font-black uppercase tracking-wider text-neutral-400 font-mono">
               [ لوحة تحكم المحفظة الحية / LIVE PORTFOLIO EQUITY ]
             </h2>
@@ -335,6 +363,67 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Drawdown Gauges */}
+        {portfolioStats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-neutral-900 pb-4">
+            {/* Daily Drawdown Gauge */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-mono text-neutral-400">
+                  {portfolioStats.currentDailyDrawdown?.toFixed(2)}% / {portfolioStats.maxDailyDrawdownLimit?.toFixed(2)}%
+                </span>
+                <span className="font-bold text-white">
+                  التراجع اليومي (Daily Drawdown) ⏱️
+                </span>
+              </div>
+              <div className="w-full h-3 bg-neutral-900 border border-neutral-800 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${
+                    portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit
+                      ? 'bg-red-500'
+                      : portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit * 0.8
+                      ? 'bg-yellow-500'
+                      : 'bg-white'
+                  }`}
+                  style={{ width: `${Math.min(100, (portfolioStats.currentDailyDrawdown / (portfolioStats.maxDailyDrawdownLimit || 5)) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-neutral-500">
+                <span>الحد الأقصى: {portfolioStats.maxDailyDrawdownLimit}%</span>
+                <span>بداية اليوم: {formatCurrency(portfolioStats.dailyStartEquity || 0)}</span>
+              </div>
+            </div>
+
+            {/* Max Drawdown Gauge */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-mono text-neutral-400">
+                  {portfolioStats.currentTotalDrawdown?.toFixed(2)}% / {portfolioStats.maxTotalDrawdownLimit?.toFixed(2)}%
+                </span>
+                <span className="font-bold text-white">
+                  التراجع الكلي (Max Drawdown) 🛡️
+                </span>
+              </div>
+              <div className="w-full h-3 bg-neutral-900 border border-neutral-800 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${
+                    portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit
+                      ? 'bg-red-500'
+                      : portfolioStats.currentTotalDrawdown >= portfolioStats.maxTotalDrawdownLimit * 0.8
+                      ? 'bg-yellow-500'
+                      : 'bg-white'
+                  }`}
+                  style={{ width: `${Math.min(100, (portfolioStats.currentTotalDrawdown / (portfolioStats.maxTotalDrawdownLimit || 10)) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-neutral-500">
+                <span>الحد الأقصى: {portfolioStats.maxTotalDrawdownLimit}%</span>
+                <span>أعلى قمة للمحفظة: {formatCurrency(portfolioStats.peakEquity || 0)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Timeframe Selector Toolbar */}
         <div className="flex items-center justify-between border-b border-neutral-900/60 pb-3 gap-2 overflow-x-auto">
           <span className="text-[10px] text-neutral-500 font-mono font-bold shrink-0">الفترة الزمنية للأداء:</span>
@@ -372,7 +461,7 @@ export default function DashboardPage() {
             {statsLoading ? (
               <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
             ) : (
-              <span className="text-xl sm:text-2xl font-black text-white block font-mono">
+              <span className={`text-xl sm:text-2xl font-black block font-mono ${accentTextClass}`}>
                 {formatCurrency(portfolioStats?.totalPortfolioValue || 0)}
               </span>
             )}

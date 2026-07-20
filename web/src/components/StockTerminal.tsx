@@ -63,6 +63,40 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const [isExecModalOpen, setIsExecModalOpen] = useState(false);
   const [actualEntryPrice, setActualEntryPrice] = useState<number>(signal.entryPrice);
   const [positionSize, setPositionSize] = useState<string>('');
+  const [riskPercentage, setRiskPercentage] = useState<number>(1);
+  const [stopLossPrice, setStopLossPrice] = useState<number>(signal.stopLoss);
+  const [setupQuality, setSetupQuality] = useState<'A+' | 'B' | 'FOMO' | 'Revenge'>('A+');
+  const [userStats, setUserStats] = useState<any>(null);
+  const [statsLoading, setStatsLoading] = useState<boolean>(false);
+
+  const fetchUserStats = async () => {
+    setStatsLoading(true);
+    try {
+      const res = await fetch('/api/portfolio/stats?type=USER');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setUserStats(json.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user stats in terminal:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isExecModalOpen) {
+      fetchUserStats();
+      setStopLossPrice(signal.stopLoss);
+    }
+  }, [isExecModalOpen, signal.stopLoss]);
+
+  // Calculations
+  const totalPortfolioValue = userStats?.totalPortfolioValue || 100000;
+  const riskAmount = totalPortfolioValue * (riskPercentage / 100);
+  const priceRiskPerShare = Math.abs(actualEntryPrice - stopLossPrice);
+  const calculatedQty = priceRiskPerShare > 0 ? Number((riskAmount / priceRiskPerShare).toFixed(4)) : 0;
+  const calculatedPositionSize = Number((calculatedQty * actualEntryPrice).toFixed(2));
 
   // Close Modal State
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -162,7 +196,11 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
           symbol: signal.symbol,
           market: signal.market,
           actualEntryPrice,
-          positionSize: Number(positionSize),
+          positionSize: calculatedPositionSize,
+          quantity: calculatedQty,
+          setupQuality,
+          initialStopLoss: stopLossPrice,
+          portfolioType: 'USER'
         }),
       });
 
@@ -465,23 +503,76 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم المركز (القيمة المستثمرة)</label>
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">نسبة المخاطرة (Risk %)</label>
                 <input
                   type="number"
-                  placeholder={signal.market === 'EGX' ? 'القيمة بالجنيه المصري' : 'القيمة بالدولار'}
-                  value={positionSize}
-                  onChange={(e) => setPositionSize(e.target.value)}
+                  step="any"
+                  value={riskPercentage}
+                  onChange={(e) => setRiskPercentage(Number(e.target.value))}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                  min="0.01"
+                  max="100"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">سعر وقف الخسارة (Stop Loss)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={stopLossPrice}
+                  onChange={(e) => setStopLossPrice(Number(e.target.value))}
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
                   required
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">جودة الصفقة (Setup Quality)</label>
+                <select
+                  value={setupQuality}
+                  onChange={(e) => setSetupQuality(e.target.value as any)}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
+                >
+                  <option value="A+">A+ (إعداد مثالي وعالي الجودة)</option>
+                  <option value="B">B (إعداد جيد)</option>
+                  <option value="FOMO">FOMO (دخول خوفاً من فوات الفرصة)</option>
+                  <option value="Revenge">Revenge (دخول انتقامي للتعويض)</option>
+                </select>
+              </div>
+
+              {/* Real-time Risk Sizing Details */}
+              <div className="p-3 bg-neutral-900/50 border border-neutral-900 rounded space-y-2 text-xs">
+                <div className="flex justify-between border-b border-neutral-900 pb-1.5 text-[10px] uppercase font-bold text-neutral-500">
+                  <span>المعايير المحسوبة</span>
+                  <span>الرقم والعملة</span>
+                </div>
+                <div className="flex justify-between text-neutral-400">
+                  <span className="font-mono">{signal.market === 'EGX' ? `${totalPortfolioValue.toLocaleString()} ج.م` : `$${totalPortfolioValue.toLocaleString()}`}</span>
+                  <span>رأس مال الحساب:</span>
+                </div>
+                <div className="flex justify-between text-neutral-400">
+                  <span className="font-mono">{signal.market === 'EGX' ? `${riskAmount.toLocaleString()} ج.م` : `$${riskAmount.toLocaleString()}`}</span>
+                  <span>قيمة المخاطرة المسموحة ({riskPercentage}%):</span>
+                </div>
+                <div className="flex justify-between text-white font-bold">
+                  <span className="font-mono text-emerald-450">{calculatedQty} سهم</span>
+                  <span>الكمية المقترحة للشراء:</span>
+                </div>
+                <div className="flex justify-between text-neutral-400">
+                  <span className="font-mono">{signal.market === 'EGX' ? `${calculatedPositionSize.toLocaleString()} ج.م` : `$${calculatedPositionSize.toLocaleString()}`}</span>
+                  <span>تكلفة المركز الإجمالية:</span>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition"
+                  disabled={calculatedQty <= 0 || statsLoading}
+                  className="flex-1 py-2 text-xs font-bold bg-white text-black border border-white hover:bg-neutral-200 rounded transition disabled:opacity-40"
                 >
-                  تأكيد التنفيذ
+                  {statsLoading ? 'جاري التحميل...' : 'تأكيد التنفيذ'}
                 </button>
                 <button
                   type="button"

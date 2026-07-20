@@ -145,6 +145,56 @@ export async function GET(request: Request) {
     const netRealizedPnL = realizedPnL - totalFees;
     const totalProfitLossPercentage = totalDeposits > 0 ? (netRealizedPnL / totalDeposits) * 100 : 0;
 
+    let maxDailyDrawdownLimit = 5;
+    let maxTotalDrawdownLimit = 10;
+    let peakEquity = totalPortfolioValue;
+    let dailyStartEquity = totalPortfolioValue;
+    let dailyStartEquityDate = new Date().toISOString().split('T')[0];
+
+    if (cashDoc) {
+      if (cashDoc.maxDailyDrawdownLimit !== undefined) {
+        maxDailyDrawdownLimit = cashDoc.maxDailyDrawdownLimit;
+      } else {
+        cashDoc.maxDailyDrawdownLimit = maxDailyDrawdownLimit;
+      }
+
+      if (cashDoc.maxTotalDrawdownLimit !== undefined) {
+        maxTotalDrawdownLimit = cashDoc.maxTotalDrawdownLimit;
+      } else {
+        cashDoc.maxTotalDrawdownLimit = maxTotalDrawdownLimit;
+      }
+
+      const storedPeak = cashDoc.peakEquity;
+      if (storedPeak === undefined || totalPortfolioValue > storedPeak) {
+        cashDoc.peakEquity = totalPortfolioValue;
+        peakEquity = totalPortfolioValue;
+      } else {
+        peakEquity = storedPeak;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const storedDailyStart = cashDoc.dailyStartEquity;
+      const storedDailyStartDate = cashDoc.dailyStartEquityDate;
+
+      if (storedDailyStart === undefined || storedDailyStartDate !== todayStr) {
+        cashDoc.dailyStartEquity = totalPortfolioValue;
+        cashDoc.dailyStartEquityDate = todayStr;
+        dailyStartEquity = totalPortfolioValue;
+      } else {
+        dailyStartEquity = storedDailyStart;
+      }
+
+      if (cashDoc.isModified()) {
+        await cashDoc.save();
+      }
+    }
+
+    const dailyDrawdownAmount = Math.max(0, dailyStartEquity - totalPortfolioValue);
+    const currentDailyDrawdown = dailyStartEquity > 0 ? (dailyDrawdownAmount / dailyStartEquity) * 100 : 0;
+
+    const totalDrawdownAmount = Math.max(0, peakEquity - totalPortfolioValue);
+    const currentTotalDrawdown = peakEquity > 0 ? (totalDrawdownAmount / peakEquity) * 100 : 0;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -161,6 +211,12 @@ export async function GET(request: Request) {
         activePositionsCount: activePositions.length,
         closedPositionsCount: closedPositions.length,
         positions: positionsDetail,
+        maxDailyDrawdownLimit,
+        maxTotalDrawdownLimit,
+        currentDailyDrawdown: Number(currentDailyDrawdown.toFixed(2)),
+        currentTotalDrawdown: Number(currentTotalDrawdown.toFixed(2)),
+        dailyStartEquity: Number(dailyStartEquity.toFixed(2)),
+        peakEquity: Number(peakEquity.toFixed(2))
       },
     });
   } catch (error: unknown) {

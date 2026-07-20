@@ -30,6 +30,8 @@ export interface IPortfolio extends Document {
   closeReason?: string;
   brokerFees: number;
   scalingHistory: IScalingTransaction[];
+  setupQuality?: 'A+' | 'B' | 'FOMO' | 'Revenge';
+  initialStopLoss?: number;
 }
 
 const PortfolioSchema = new Schema<IPortfolio>(
@@ -64,7 +66,9 @@ const PortfolioSchema = new Schema<IPortfolio>(
     pnlPercentage: { type: Number },
     closeReason: { type: String },
     brokerFees: { type: Number, default: 0 },
-    scalingHistory: { type: Schema.Types.Mixed, default: [] }
+    scalingHistory: { type: Schema.Types.Mixed, default: [] },
+    setupQuality: { type: String, enum: ['A+', 'B', 'FOMO', 'Revenge'], default: 'A+' },
+    initialStopLoss: { type: Number }
   },
   { timestamps: true, collection: 'user_portfolio' }
 );

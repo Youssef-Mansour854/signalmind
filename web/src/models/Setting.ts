@@ -5,6 +5,11 @@ export interface ISetting extends Document {
   value: any;
   totalDeposits?: number;
   totalWithdrawals?: number;
+  maxDailyDrawdownLimit?: number;
+  maxTotalDrawdownLimit?: number;
+  peakEquity?: number;
+  dailyStartEquity?: number;
+  dailyStartEquityDate?: string;
 }
 
 const SettingSchema = new Schema<ISetting>(
@@ -13,8 +18,14 @@ const SettingSchema = new Schema<ISetting>(
     value: { type: Schema.Types.Mixed, required: true },
     totalDeposits: { type: Number, default: 0 },
     totalWithdrawals: { type: Number, default: 0 },
+    maxDailyDrawdownLimit: { type: Number, default: 5 },
+    maxTotalDrawdownLimit: { type: Number, default: 10 },
+    peakEquity: { type: Number },
+    dailyStartEquity: { type: Number },
+    dailyStartEquityDate: { type: String },
   },
   { timestamps: true, collection: 'settings' }
 );
 
 export default mongoose.models.Setting || mongoose.model<ISetting>('Setting', SettingSchema);
+

@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     await dbConnect();
     const body = await request.json();
     
-    const { signalId, symbol, market, actualEntryPrice, positionSize, portfolioType } = body;
+    const { signalId, symbol, market, actualEntryPrice, positionSize, portfolioType, setupQuality, initialStopLoss, quantity } = body;
     
     if (!signalId || !symbol || !market || actualEntryPrice === undefined || positionSize === undefined) {
       return NextResponse.json({ success: false, error: 'برجاء ملء جميع الحقول المطلوبة' }, { status: 400 });
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
 
     const entry = Number(actualEntryPrice);
     const size = Number(positionSize);
-    const quantity = entry > 0 ? size / entry : 0;
+    const quantityCalc = entry > 0 ? size / entry : 0;
+    const finalQty = quantity !== undefined ? Number(quantity) : quantityCalc;
     const pType = portfolioType === 'SYSTEM' ? 'SYSTEM' : 'USER';
 
     const newPortfolioItem = new Portfolio({
@@ -44,12 +45,14 @@ export async function POST(request: Request) {
       market,
       actualEntryPrice: entry,
       positionSize: size,
-      quantity: Number(quantity.toFixed(4)),
+      quantity: Number(finalQty.toFixed(4)),
       currentPrice: entry, // Initial currentPrice is entryPrice
       currentPnL: 0,
       status: 'ACTIVE',
       portfolioType: pType,
-      executedAt: new Date()
+      executedAt: new Date(),
+      setupQuality: setupQuality || 'A+',
+      initialStopLoss: initialStopLoss !== undefined ? Number(initialStopLoss) : undefined
     });
 
     await newPortfolioItem.save();
