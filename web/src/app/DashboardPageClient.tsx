@@ -75,6 +75,32 @@ export default function DashboardPage() {
     window.dispatchEvent(new Event('accountModeChanged'));
   };
 
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerResult, setScannerResult] = useState<string | null>(null);
+
+  const handleRunScanner = async () => {
+    setIsScanning(true);
+    setScannerResult(null);
+    try {
+      const res = await fetch('/api/scanner/run', {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (json.success) {
+        setScannerResult(json.message);
+        // Refresh data
+        fetchSignals();
+        fetchPortfolioStats(portfolioType, timeframe);
+      } else {
+        alert(json.error || 'فشلت عملية تشغيل رادار السوق');
+      }
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const showDrawdownAlerts = accountMode === 'FUNDED';
   const dailyNear = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit * 0.8);
   const dailyHit = showDrawdownAlerts && !!(portfolioStats && portfolioStats.currentDailyDrawdown >= portfolioStats.maxDailyDrawdownLimit);
@@ -302,6 +328,27 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Run Market Scanner Button */}
+          <button
+            onClick={handleRunScanner}
+            disabled={isScanning}
+            className="px-3 py-1.5 text-xs font-bold bg-neutral-900 hover:bg-neutral-850 text-white border border-neutral-800 rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
+          >
+            {isScanning ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>جاري مسح السوق...</span>
+              </>
+            ) : (
+              <>
+                <span>تشغيل رادار السوق 🌍</span>
+              </>
+            )}
+          </button>
+
           {/* Market Tab Selectors */}
           <div className="flex p-0.5 rounded bg-neutral-900 border border-neutral-800">
             <button
@@ -336,6 +383,18 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {scannerResult && (
+        <div className="p-4 bg-emerald-950/40 border border-emerald-500/60 rounded-lg text-emerald-400 text-xs font-sans flex items-center justify-between transition-all">
+          <span>{scannerResult}</span>
+          <button
+            onClick={() => setScannerResult(null)}
+            className="text-emerald-400 hover:text-white font-bold ml-2 font-mono"
+          >
+            [X]
+          </button>
+        </div>
+      )}
 
       {/* Live Portfolio Equity & Balance Banner */}
       <div className={`border bg-neutral-950 p-6 rounded-lg space-y-4 text-right transition duration-300 ${accentBorderClass}`}>
