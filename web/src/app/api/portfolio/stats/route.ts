@@ -88,21 +88,24 @@ export async function GET(request: Request) {
       );
     }
 
-    // 5. Compute metrics
-    let totalInvestedCost = 0;
-    let currentStocksValue = 0;
+    // 5. Compute metrics according to strict accounting rules:
+    // costBasis = Sum(entry * quantity) for ACTIVE positions (Static cost basis)
+    // currentPositionValue = Sum(livePrice * quantity) for ACTIVE positions (Dynamic market value)
+    let costBasis = 0;
+    let currentPositionValue = 0;
 
     const positionsDetail = activePositions.map((pos) => {
       const entry = pos.actualEntryPrice;
       const size = pos.positionSize;
       const qty = pos.quantity || (entry > 0 ? size / entry : 0);
       const livePrice = symbolMap[pos.symbol] || pos.currentPrice || entry;
+      const itemCostBasis = entry * qty;
       const itemValue = livePrice * qty;
-      const itemPnL = itemValue - size;
-      const itemPnLPct = size > 0 ? (itemPnL / size) * 100 : 0;
+      const itemPnL = itemValue - itemCostBasis;
+      const itemPnLPct = itemCostBasis > 0 ? (itemPnL / itemCostBasis) * 100 : 0;
 
-      totalInvestedCost += size;
-      currentStocksValue += itemValue;
+      costBasis += itemCostBasis;
+      currentPositionValue += itemValue;
 
       return {
         _id: pos._id,
@@ -126,12 +129,16 @@ export async function GET(request: Request) {
       totalFees += (cp.brokerFees || 0);
     }
 
-    const costBasis = totalInvestedCost;
-    const unrealizedPnL = currentStocksValue - costBasis;
-    // Available cash = Initial balance minus static cost basis plus realized PnL (Stays stable during tick fluctuations)
+    // PnL calculations
+    const unrealizedPnL = currentPositionValue - costBasis;
+    
+    // Financial Logic Rules:
+    // 1. Available Cash = InitialBalance - costBasis + realizedPnL (Static during open trades, floating PnL excluded)
     const availableCash = initialBalance - costBasis + realizedPnL;
-    // Total Equity = Available cash + current stocks value = Initial balance + realized PnL + unrealized PnL
-    const totalPortfolioValue = availableCash + currentStocksValue;
+    // 2. Invested Capital = currentPositionValue (Dynamic, absorbs floating unrealized PnL)
+    const investedCapital = currentPositionValue;
+    // 3. Total Equity = Available Cash + currentPositionValue
+    const totalPortfolioValue = availableCash + currentPositionValue;
     
     const totalProfitLoss = unrealizedPnL + realizedPnL - totalFees;
     const totalProfitLossPercentage = totalDeposits > 0 ? (totalProfitLoss / totalDeposits) * 100 : 0;
@@ -192,9 +199,11 @@ export async function GET(request: Request) {
         portfolioType: type,
         timeframe,
         availableCash: Number(availableCash.toFixed(2)),
-        totalInvestedCost: Number(currentStocksValue.toFixed(2)), // Dynamically fluctuates with live market value
-        costBasis: Number(costBasis.toFixed(2)), // Static initial position cost
-        currentStocksValue: Number(currentStocksValue.toFixed(2)),
+        investedCapital: Number(investedCapital.toFixed(2)),
+        totalInvestedCost: Number(investedCapital.toFixed(2)), // For backward compatibility with UI components
+        costBasis: Number(costBasis.toFixed(2)),
+        currentPositionValue: Number(currentPositionValue.toFixed(2)),
+        currentStocksValue: Number(currentPositionValue.toFixed(2)),
         realizedPnL: Number(realizedPnL.toFixed(2)),
         unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
         totalPortfolioValue: Number(totalPortfolioValue.toFixed(2)),
@@ -220,7 +229,13 @@ export async function GET(request: Request) {
       data: {
         totalPortfolioValue: 100000,
         availableCash: 100000,
+        investedCapital: 0,
         totalInvestedCost: 0,
+        costBasis: 0,
+        currentPositionValue: 0,
+        currentStocksValue: 0,
+        realizedPnL: 0,
+        unrealizedPnL: 0,
         totalProfitLoss: 0,
         totalProfitLossPercentage: 0,
         activePositionsCount: 0,

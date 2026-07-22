@@ -31,9 +31,14 @@ interface Signal {
 
 interface PortfolioStats {
   availableCash: number;
+  investedCapital?: number;
   totalInvestedCost: number;
+  costBasis?: number;
+  currentPositionValue?: number;
   currentStocksValue: number;
   totalPortfolioValue: number;
+  realizedPnL?: number;
+  unrealizedPnL?: number;
   totalProfitLoss: number;
   totalProfitLossPercentage: number;
   activePositionsCount: number;
@@ -672,7 +677,7 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-                  {formatCurrency(portfolioStats?.totalInvestedCost || 0)}
+                  {formatCurrency(portfolioStats?.investedCapital ?? portfolioStats?.totalInvestedCost ?? 0)}
                 </span>
               )}
               <span className="text-[9px] text-neutral-500 font-mono">
