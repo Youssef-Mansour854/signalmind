@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb';
 import Portfolio from '@/models/Portfolio';
 import Setting from '@/models/Setting';
 import '@/models/Signal';
+import { scrapeEGXLivePrice } from '@/utils/marketFetcher';
 
 const yahooFinance = new YahooFinance();
 
@@ -23,45 +24,26 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') === 'SYSTEM' ? 'SYSTEM' : 'USER';
     const timeframe = searchParams.get('timeframe') || 'all';
+    const market = searchParams.get('market') === 'EGX' ? 'EGX' : 'US';
 
     const startDate = getTimeframeStartDate(timeframe);
 
-    // 1. Fetch available cash for requested portfolio type
-    const cashKey = `availableCash_${type}`;
+    // 1. Fetch available cash for requested portfolio type and market
+    const defaultInitialBalance = 100000;
+    const cashKey = `availableCash_${type}_${market}`;
     const cashDoc = await Setting.findOne({ key: cashKey });
-    const availableCash = cashDoc && typeof cashDoc.value === 'number' ? cashDoc.value : 100000;
-    const totalDeposits = cashDoc && typeof cashDoc.totalDeposits === 'number' && cashDoc.totalDeposits > 0 ? cashDoc.totalDeposits : availableCash;
+    const initialBalance = cashDoc && typeof cashDoc.value === 'number' ? cashDoc.value : defaultInitialBalance;
+    const totalDeposits = cashDoc && typeof cashDoc.totalDeposits === 'number' && cashDoc.totalDeposits > 0 ? cashDoc.totalDeposits : initialBalance;
 
-    // 2. Fetch active portfolio positions for type and optional date range
-    const activeFilter: any = { status: 'ACTIVE', portfolioType: type };
+    // 2. Fetch active portfolio positions for type, market, and optional date range
+    const activeFilter: any = { status: 'ACTIVE', portfolioType: type, market: market };
     if (startDate) {
       activeFilter.executedAt = { $gte: startDate };
     }
     const activePositions = await Portfolio.find(activeFilter).populate('signalId');
- 
-    if (!activePositions || activePositions.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          portfolioType: type,
-          timeframe,
-          availableCash,
-          totalInvestedCost: 0,
-          currentStocksValue: 0,
-          realizedPnL: 0,
-          unrealizedPnL: 0,
-          totalPortfolioValue: availableCash || 0,
-          totalProfitLoss: 0,
-          totalProfitLossPercentage: 0,
-          activePositionsCount: 0,
-          closedPositionsCount: 0,
-          positions: []
-        }
-      });
-    }
 
-    // 3. Fetch closed positions for realized PnL within timeframe
-    const closedFilter: any = { status: 'CLOSED', portfolioType: type };
+    // 3. Fetch closed positions for realized PnL within timeframe and market
+    const closedFilter: any = { status: 'CLOSED', portfolioType: type, market: market };
     if (startDate) {
       closedFilter.closedAt = { $gte: startDate };
     }
@@ -81,12 +63,19 @@ export async function GET(request: Request) {
         if (pos.market === 'EGX' && !yfSymbol.endsWith('.CA')) {
           yfSymbol = `${yfSymbol}.CA`;
         }
-        return { symbol: pos.symbol, yfSymbol };
+        return { symbol: pos.symbol, yfSymbol, market: pos.market };
       })));
 
       await Promise.all(
-        symbolsToFetch.map(async ({ symbol, yfSymbol }) => {
+        symbolsToFetch.map(async ({ symbol, yfSymbol, market: itemMarket }) => {
           try {
+            if (itemMarket === 'EGX') {
+              const liveEgxPrice = await scrapeEGXLivePrice(symbol);
+              if (liveEgxPrice && typeof liveEgxPrice === 'number' && liveEgxPrice > 0) {
+                symbolMap[symbol] = liveEgxPrice;
+                return;
+              }
+            }
             const q = await yahooFinance.quote(yfSymbol) as any;
             const price = q?.regularMarketPrice || q?.postMarketPrice || q?.close;
             if (price && typeof price === 'number') {
@@ -138,12 +127,13 @@ export async function GET(request: Request) {
     }
 
     const unrealizedPnL = currentStocksValue - totalInvestedCost;
-    const totalProfitLoss = unrealizedPnL + realizedPnL - totalFees;
-    const totalPortfolioValue = availableCash + currentStocksValue + realizedPnL;
+    // Available cash = Initial balance minus invested capital plus realized PnL
+    const availableCash = initialBalance - totalInvestedCost + realizedPnL;
+    // Total Equity = Available cash + current stocks value = Initial balance + realized PnL + unrealized PnL
+    const totalPortfolioValue = availableCash + currentStocksValue;
     
-    // Net ROI % = ((realizedPnL - totalFees) / totalDeposits) * 100
-    const netRealizedPnL = realizedPnL - totalFees;
-    const totalProfitLossPercentage = totalDeposits > 0 ? (netRealizedPnL / totalDeposits) * 100 : 0;
+    const totalProfitLoss = unrealizedPnL + realizedPnL - totalFees;
+    const totalProfitLossPercentage = totalDeposits > 0 ? (totalProfitLoss / totalDeposits) * 100 : 0;
 
     let maxDailyDrawdownLimit = 5;
     let maxTotalDrawdownLimit = 10;

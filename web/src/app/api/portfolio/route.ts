@@ -8,9 +8,13 @@ export async function GET(request: Request) {
     await dbConnect();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
+    const market = searchParams.get('market');
     const filter: any = {};
     if (type === 'USER' || type === 'SYSTEM') {
       filter.portfolioType = type;
+    }
+    if (market === 'US' || market === 'EGX') {
+      filter.market = market;
     }
 
     const portfolio = await Portfolio.find(filter)

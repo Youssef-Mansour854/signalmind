@@ -154,10 +154,10 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchPortfolioStats = async (pType = portfolioType, tf = timeframe) => {
+  const fetchPortfolioStats = async (pType = portfolioType, tf = timeframe, mFilter = marketFilter) => {
     setStatsLoading(true);
     try {
-      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}`);
+      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}&market=${mFilter}`);
       if (!res.ok) {
         console.error("API returned an error:", res.status);
         return;
@@ -180,10 +180,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchSignals();
-    fetchPortfolioStats(portfolioType, timeframe);
+    fetchPortfolioStats(portfolioType, timeframe, marketFilter);
 
     // Auto poll stats every 30 seconds
-    const interval = setInterval(() => fetchPortfolioStats(portfolioType, timeframe), 30000);
+    const interval = setInterval(() => fetchPortfolioStats(portfolioType, timeframe, marketFilter), 30000);
     return () => clearInterval(interval);
   }, [marketFilter, portfolioType, timeframe]);
 
@@ -232,7 +232,8 @@ export default function DashboardPage() {
         body: JSON.stringify({
           action: cashAction,
           amount: Number(cashInput),
-          type: portfolioType
+          type: portfolioType,
+          market: marketFilter
         }),
       });
       const json = await res.json();

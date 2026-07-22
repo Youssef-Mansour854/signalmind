@@ -7,7 +7,8 @@ export async function GET(request: Request) {
     await dbConnect();
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') === 'SYSTEM' ? 'SYSTEM' : 'USER';
-    const key = `availableCash_${type}`;
+    const market = searchParams.get('market') === 'EGX' ? 'EGX' : 'US';
+    const key = `availableCash_${type}_${market}`;
     let doc = await Setting.findOne({ key });
     if (!doc) {
       doc = new Setting({ key, value: 100000, totalDeposits: 100000, totalWithdrawals: 0 });
@@ -47,7 +48,8 @@ export async function POST(request: Request) {
     const { action, amount, availableCash, type, maxDailyDrawdownLimit, maxTotalDrawdownLimit } = body;
 
     const pType = type === 'SYSTEM' ? 'SYSTEM' : 'USER';
-    const key = `availableCash_${pType}`;
+    const pMarket = body.market === 'EGX' ? 'EGX' : 'US';
+    const key = `availableCash_${pType}_${pMarket}`;
 
     // Find existing doc or create one
     let doc = await Setting.findOne({ key });
