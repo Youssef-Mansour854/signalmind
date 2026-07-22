@@ -80,24 +80,28 @@ export default function DashboardPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scannerResult, setScannerResult] = useState<string | null>(null);
 
-  const handleRunScanner = async () => {
+  const handleRunScanner = async (isAutoInput?: boolean | React.MouseEvent) => {
+    const isAuto = typeof isAutoInput === 'boolean' ? isAutoInput : false;
     setIsScanning(true);
     setScannerResult(null);
     try {
-      const res = await fetch('/api/scanner/run', {
+      const res = await fetch('/api/scanner/run?manual=true', {
         method: 'POST',
+        headers: {
+          'x-manual-trigger': 'true'
+        }
       });
       const json = await res.json();
       if (json.success) {
-        setScannerResult(json.message);
+        setScannerResult(isAuto ? `⚡ تم المسح الآلي اللحظي فور افتتاح السوق الأمريكية (09:30 AM NY): ${json.message}` : json.message);
         // Refresh data
         fetchSignals();
         fetchPortfolioStats(portfolioType, timeframe);
       } else {
-        alert(json.error || 'فشلت عملية تشغيل رادار السوق');
+        if (!isAuto) alert(json.error || 'فشلت عملية تشغيل رادار السوق');
       }
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
+      if (!isAuto) alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
     } finally {
       setIsScanning(false);
     }
@@ -178,6 +182,41 @@ export default function DashboardPage() {
     const interval = setInterval(() => fetchPortfolioStats(portfolioType, timeframe), 30000);
     return () => clearInterval(interval);
   }, [marketFilter, portfolioType, timeframe]);
+
+  // US Market Open Precision Trigger (09:30:00 AM NY Time)
+  useEffect(() => {
+    const calculateMsUntilMarketOpen = (): number | null => {
+      const now = new Date();
+      const nyDateStr = now.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+      const nyTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false });
+      
+      const nyDateObj = new Date(`${nyDateStr} ${nyTimeStr}`);
+      const dayOfWeek = nyDateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+
+      // Only run on weekdays (Monday - Friday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) return null;
+
+      // Target 09:30:00 AM today in NY
+      const targetNYObj = new Date(`${nyDateStr} 09:30:00`);
+      const diffMs = targetNYObj.getTime() - nyDateObj.getTime();
+
+      // If current NY time is before 09:30:00 AM today
+      if (diffMs > 0) {
+        return diffMs;
+      }
+      return null;
+    };
+
+    const msRemaining = calculateMsUntilMarketOpen();
+    if (msRemaining !== null && msRemaining > 0) {
+      console.log(`[AUTO-PILOT] Scheduled market open scanner in ${(msRemaining / 1000).toFixed(1)} seconds.`);
+      const timer = setTimeout(() => {
+        handleRunScanner(true);
+      }, msRemaining);
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const handleCashSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,7 +371,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           {/* Run Market Scanner Button */}
           <button
-            onClick={handleRunScanner}
+            onClick={() => handleRunScanner(false)}
             disabled={isScanning}
             className="px-3 py-1.5 text-xs font-bold bg-neutral-900 hover:bg-neutral-850 text-white border border-neutral-800 rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
           >

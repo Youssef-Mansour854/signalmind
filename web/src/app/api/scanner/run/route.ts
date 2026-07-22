@@ -34,8 +34,47 @@ const WATCHLIST = [
 // Helper delay to avoid rate limiting
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isNYMarketOpenTime(date: Date = new Date()): boolean {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  let hour = 0;
+  let minute = 0;
+  for (const part of parts) {
+    if (part.type === 'hour') hour = parseInt(part.value, 10);
+    if (part.type === 'minute') minute = parseInt(part.value, 10);
+  }
+  // Allow window 9:30 AM to 9:35 AM (in case cron triggers slightly after 9:30)
+  return hour === 9 && minute >= 30 && minute <= 35;
+}
+
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get('authorization');
+    const isManualTrigger = request.headers.get('x-manual-trigger') === 'true' || new URL(request.url).searchParams.get('manual') === 'true';
+
+    // Verify CRON_SECRET if provided in environment variables and call is not manual
+    if (process.env.CRON_SECRET && !isManualTrigger) {
+      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return NextResponse.json({ success: false, error: 'Unauthorized cron request.' }, { status: 401 });
+      }
+    }
+
+    // Time-guard check for automated Vercel Cron calls (ensure 09:30 AM NY time)
+    if (!isManualTrigger) {
+      if (!isNYMarketOpenTime()) {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'تم تخطي المسح التلقائي لأن الوقت الحالي ليس نافذة افتتاح سوق نيويورك (09:30 صباحاً).'
+        });
+      }
+    }
+
     await dbConnect();
 
     const apiKeysString = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '';
