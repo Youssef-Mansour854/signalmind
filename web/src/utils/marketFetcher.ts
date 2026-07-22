@@ -25,9 +25,11 @@ export interface MarketData {
  * Converts ticker formats like "FWRY.CA" or "FWRY" -> "FWRY:CAI"
  */
 export async function scrapeEGXLivePrice(rawSymbol: string): Promise<number | null> {
+  const cleanSymbol = rawSymbol.replace(/\.CA$/i, '').trim();
+  const googleTicker = `${cleanSymbol}:CAI`;
+  console.log(`[Scraper] Fetching Google Finance for ${rawSymbol} (${googleTicker})...`);
+
   try {
-    const cleanSymbol = rawSymbol.replace(/\.CA$/i, '').trim();
-    const googleTicker = `${cleanSymbol}:CAI`;
     const url = `https://www.google.com/finance/quote/${encodeURIComponent(googleTicker)}`;
 
     const response = await fetch(url, {
@@ -40,36 +42,54 @@ export async function scrapeEGXLivePrice(rawSymbol: string): Promise<number | nu
     });
 
     if (!response.ok) {
-      console.warn(`[EGX Scraper] Google Finance HTTP ${response.status} for ${googleTicker}`);
+      console.warn(`[Scraper ERROR] Google Finance HTTP ${response.status} for ${googleTicker}`);
       return null;
     }
 
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // Primary selector used by Google Finance for live security price
-    const priceText = $('.YMlKec.fxKbKc').first().text().trim();
+    // Primary selector 1: Used by Google Finance for main live price
+    let priceText = $('.YMlKec.fxKbKc').first().text().trim();
+    if (!priceText) {
+      // Primary selector 2: General YMlKec class fallback
+      priceText = $('div[class*="YMlKec"]').first().text().trim();
+    }
+
     if (priceText) {
       const cleaned = priceText.replace(/[^0-9.]/g, '');
       const price = parseFloat(cleaned);
       if (!isNaN(price) && price > 0) {
+        console.log(`[Scraper SUCCESS] Scraped live price for ${rawSymbol}: ${price}`);
         return price;
       }
     }
 
-    // Fallback: search for data-last-price regex pattern in HTML
+    // Fallback 1: data-last-price regex
     const priceMatch = html.match(/data-last-price="([0-9.]+)"/i);
     if (priceMatch && priceMatch[1]) {
       const price = parseFloat(priceMatch[1]);
       if (!isNaN(price) && price > 0) {
+        console.log(`[Scraper SUCCESS] Scraped live price for ${rawSymbol} via regex: ${price}`);
         return price;
       }
     }
 
-    console.warn(`[EGX Scraper] Price selector failed for ${googleTicker}`);
+    // Fallback 2: HTML container regex match for price digits
+    const containerMatch = html.match(/<div[^>]*class="[^"]*YMlKec[^"]*"[^>]*>[\s$EGP]*([0-9.,]+)<\/div>/i);
+    if (containerMatch && containerMatch[1]) {
+      const cleaned = containerMatch[1].replace(/,/g, '');
+      const price = parseFloat(cleaned);
+      if (!isNaN(price) && price > 0) {
+        console.log(`[Scraper SUCCESS] Scraped live price for ${rawSymbol} via container regex: ${price}`);
+        return price;
+      }
+    }
+
+    console.warn(`[Scraper ERROR] Could not parse price for ${rawSymbol} (${googleTicker})`);
     return null;
   } catch (err: any) {
-    console.error(`[EGX Scraper] Error scraping ${rawSymbol}:`, err.message);
+    console.error(`[Scraper ERROR] Exception scraping ${rawSymbol}:`, err.message);
     return null;
   }
 }
@@ -119,29 +139,31 @@ export async function fetchMarketData(
 
   // Hybrid Merging for EGX: Override/append latest candle with fresh Google Finance live tick
   if (isEGX && liveScrapedPrice !== null && liveScrapedPrice > 0) {
+    const nowFreshDate = new Date();
     if (validBars.length > 0) {
       const lastBar = validBars[validBars.length - 1];
       const barDate = new Date(lastBar.date);
-      const isSameDay = barDate.toDateString() === today.toDateString();
+      const isSameDay = barDate.toDateString() === nowFreshDate.toDateString();
 
       if (isSameDay) {
         lastBar.close = liveScrapedPrice;
+        lastBar.date = nowFreshDate; // Ensure last candle date is updated to current time!
       } else {
         validBars.push({
-          date: today,
+          date: nowFreshDate,
           close: liveScrapedPrice,
           open: liveScrapedPrice,
           high: liveScrapedPrice,
           low: liveScrapedPrice,
         });
       }
-      lastCandleDate = today;
+      lastCandleDate = nowFreshDate;
     } else {
       validBars = Array(50).fill(0).map(() => ({
-        date: today,
+        date: nowFreshDate,
         close: liveScrapedPrice!,
       }));
-      lastCandleDate = today;
+      lastCandleDate = nowFreshDate;
     }
   }
 

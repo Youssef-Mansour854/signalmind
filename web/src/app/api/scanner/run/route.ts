@@ -277,6 +277,7 @@ export async function POST(request: Request) {
         });
 
         await newSignal.save();
+        console.log(`[AI SUCCESS] Generated signal for ${symbol} in timeframe: ${finalTimeframe}`);
 
         resultsSummary.push(`${symbol}: تم التحديث بنجاح كـ (${finalTimeframe})`);
         successCount++;
@@ -286,7 +287,7 @@ export async function POST(request: Request) {
 
       } catch (err: any) {
         if (err instanceof StaleDataError) {
-          console.warn(`[Guard] Skipped ${symbol} due to stale data: ${err.message}`);
+          console.warn(`[Guard REJECT] Skipped ${symbol} due to stale data: ${err.message}`);
           resultsSummary.push(`${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`);
         } else {
           console.error(`Error scanning ${symbol}:`, err);
