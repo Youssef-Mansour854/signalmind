@@ -129,19 +129,21 @@ export async function GET(request: Request) {
       totalFees += (cp.brokerFees || 0);
     }
 
-    // PnL calculations
+    // Separate PnL Calculations
     const unrealizedPnL = currentPositionValue - costBasis;
     
-    // Financial Logic Rules:
+    // Strict Accounting Financial Rules:
     // 1. Available Cash = InitialBalance - costBasis + realizedPnL (Static during open trades, floating PnL excluded)
     const availableCash = initialBalance - costBasis + realizedPnL;
+    
     // 2. Invested Capital = currentPositionValue (Dynamic, absorbs floating unrealized PnL)
     const investedCapital = currentPositionValue;
-    // 3. Total Equity = Available Cash + currentPositionValue
-    const totalPortfolioValue = availableCash + currentPositionValue;
     
-    const totalProfitLoss = unrealizedPnL + realizedPnL - totalFees;
-    const totalProfitLossPercentage = totalDeposits > 0 ? (totalProfitLoss / totalDeposits) * 100 : 0;
+    // 3. Total Equity = Available Cash + investedCapital (equals InitialBalance + realizedPnL + unrealizedPnL)
+    const totalPortfolioValue = availableCash + investedCapital;
+    
+    const totalPnL = unrealizedPnL + realizedPnL - totalFees;
+    const totalProfitLossPercentage = totalDeposits > 0 ? (totalPnL / totalDeposits) * 100 : 0;
 
     let maxDailyDrawdownLimit = 5;
     let maxTotalDrawdownLimit = 10;
@@ -193,32 +195,37 @@ export async function GET(request: Request) {
     const totalDrawdownAmount = Math.max(0, peakEquity - totalPortfolioValue);
     const currentTotalDrawdown = peakEquity > 0 ? (totalDrawdownAmount / peakEquity) * 100 : 0;
 
+    const payload = {
+      portfolioType: type,
+      timeframe,
+      availableCash: Number(availableCash.toFixed(2)),
+      investedCapital: Number(investedCapital.toFixed(2)),
+      totalPortfolioValue: Number(totalPortfolioValue.toFixed(2)),
+      totalPnL: Number(totalPnL.toFixed(2)),
+      totalProfitLoss: Number(totalPnL.toFixed(2)),
+      totalProfitLossPercentage: Number(totalProfitLossPercentage.toFixed(2)),
+      costBasis: Number(costBasis.toFixed(2)),
+      currentPositionValue: Number(currentPositionValue.toFixed(2)),
+      currentStocksValue: Number(currentPositionValue.toFixed(2)),
+      totalInvestedCost: Number(investedCapital.toFixed(2)),
+      realizedPnL: Number(realizedPnL.toFixed(2)),
+      unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
+      activePositionsCount: activePositions.length,
+      closedPositionsCount: closedPositions.length,
+      positions: positionsDetail,
+      maxDailyDrawdownLimit,
+      maxTotalDrawdownLimit,
+      currentDailyDrawdown: Number(currentDailyDrawdown.toFixed(2)),
+      currentTotalDrawdown: Number(currentTotalDrawdown.toFixed(2)),
+      dailyStartEquity: Number(dailyStartEquity.toFixed(2)),
+      peakEquity: Number(peakEquity.toFixed(2))
+    };
+
+    console.log("[Portfolio Stats API Output]", payload);
+
     return NextResponse.json({
       success: true,
-      data: {
-        portfolioType: type,
-        timeframe,
-        availableCash: Number(availableCash.toFixed(2)),
-        investedCapital: Number(investedCapital.toFixed(2)),
-        totalInvestedCost: Number(investedCapital.toFixed(2)), // For backward compatibility with UI components
-        costBasis: Number(costBasis.toFixed(2)),
-        currentPositionValue: Number(currentPositionValue.toFixed(2)),
-        currentStocksValue: Number(currentPositionValue.toFixed(2)),
-        realizedPnL: Number(realizedPnL.toFixed(2)),
-        unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
-        totalPortfolioValue: Number(totalPortfolioValue.toFixed(2)),
-        totalProfitLoss: Number(totalProfitLoss.toFixed(2)),
-        totalProfitLossPercentage: Number(totalProfitLossPercentage.toFixed(2)),
-        activePositionsCount: activePositions.length,
-        closedPositionsCount: closedPositions.length,
-        positions: positionsDetail,
-        maxDailyDrawdownLimit,
-        maxTotalDrawdownLimit,
-        currentDailyDrawdown: Number(currentDailyDrawdown.toFixed(2)),
-        currentTotalDrawdown: Number(currentTotalDrawdown.toFixed(2)),
-        dailyStartEquity: Number(dailyStartEquity.toFixed(2)),
-        peakEquity: Number(peakEquity.toFixed(2))
-      },
+      data: payload,
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -227,17 +234,20 @@ export async function GET(request: Request) {
       success: false,
       error: "Internal Server Error",
       data: {
+        portfolioType: 'USER',
+        timeframe: 'all',
         totalPortfolioValue: 100000,
         availableCash: 100000,
         investedCapital: 0,
-        totalInvestedCost: 0,
+        totalPnL: 0,
+        totalProfitLoss: 0,
+        totalProfitLossPercentage: 0,
         costBasis: 0,
         currentPositionValue: 0,
         currentStocksValue: 0,
+        totalInvestedCost: 0,
         realizedPnL: 0,
         unrealizedPnL: 0,
-        totalProfitLoss: 0,
-        totalProfitLossPercentage: 0,
         activePositionsCount: 0,
         closedPositionsCount: 0,
         positions: []

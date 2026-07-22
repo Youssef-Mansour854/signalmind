@@ -37,6 +37,7 @@ interface PortfolioStats {
   currentPositionValue?: number;
   currentStocksValue: number;
   totalPortfolioValue: number;
+  totalPnL?: number;
   realizedPnL?: number;
   unrealizedPnL?: number;
   totalProfitLoss: number;
@@ -712,12 +713,12 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <div className="flex items-baseline gap-2">
-                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
-                    {(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
-                    {formatCurrency(portfolioStats?.totalProfitLoss || 0)}
+                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                    {(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? '+' : ''}
+                    {formatCurrency(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0)}
                   </span>
-                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalProfitLoss || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                    ({(portfolioStats?.totalProfitLoss || 0) >= 0 ? '+' : ''}
+                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                    ({(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? '+' : ''}
                     {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
                   </span>
                 </div>
