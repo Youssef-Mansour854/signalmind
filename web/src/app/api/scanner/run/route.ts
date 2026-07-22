@@ -7,6 +7,22 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 
+function getExpirationDate(timeframe: string, createdAt: Date): Date {
+  const date = new Date(createdAt.getTime());
+  if (timeframe === 'يومي' || timeframe === 'DAY') {
+    date.setHours(date.getHours() + 24);
+  } else if (timeframe === 'أسبوعي' || timeframe === 'WEEK') {
+    date.setDate(date.getDate() + 7);
+  } else if (timeframe === 'شهري' || timeframe === 'MONTH') {
+    date.setDate(date.getDate() + 30);
+  } else if (timeframe === 'استثمار سنوي' || timeframe === 'YEAR') {
+    date.setDate(date.getDate() + 365);
+  } else {
+    date.setHours(date.getHours() + 24);
+  }
+  return date;
+}
+
 const WATCHLIST = [
   { symbol: 'AAPL', market: 'US' },
   { symbol: 'MSFT', market: 'US' },
@@ -159,42 +175,50 @@ export async function POST(request: Request) {
         const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
         const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
 
-        // 5. Save Signal to MongoDB
-        await Signal.findOneAndUpdate(
-          { symbol },
-          {
-            $set: {
-              symbol,
-              market,
-              signalType: parsed.signalType || 'HOLD',
-              entryPrice: entry,
-              stopLoss: sl,
-              takeProfit: tp,
-              currentPrice: latestPrice,
-              status: 'Active',
-              aiConfidence: parsed.aiConfidence || 'Medium',
-              aiRisk: parsed.aiRisk || 'Medium',
-              timeframe: finalTimeframe,
-              signalStrength: parsed.signalStrength || 'متوسطة',
-              explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
-              indicators: {
-                close: latestPrice,
-                rsi: latestRSI,
-                macdLine: latestMACD.MACD || 0,
-                macdSignal: latestMACD.signal || 0,
-              },
-              scoreMetrics: {
-                riskRewardRatio: Number(rrr.toFixed(2)),
-                confluenceScore: 75,
-                aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
-                totalScore: 75,
-                rank: 999,
-              },
-              updatedAt: new Date(),
-            },
-          },
-          { new: true, upsert: true }
+        // Deduplication: Before inserting a new signal for a specific symbol and timeframe,
+        // find any existing 'ACTIVE'/'Active'/'Pending' signals for that same symbol/timeframe and update status to 'EXPIRED'
+        await Signal.updateMany(
+          { symbol, timeframe: finalTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
+          { $set: { status: 'EXPIRED' } }
         );
+
+        const createdAt = new Date();
+        const expiresAt = getExpirationDate(finalTimeframe, createdAt);
+
+        // 5. Save Signal to MongoDB (Insert new document)
+        const newSignal = new Signal({
+          symbol,
+          market,
+          signalType: parsed.signalType || 'HOLD',
+          entryPrice: entry,
+          stopLoss: sl,
+          takeProfit: tp,
+          currentPrice: latestPrice,
+          status: 'ACTIVE',
+          expiresAt,
+          aiConfidence: parsed.aiConfidence || 'Medium',
+          aiRisk: parsed.aiRisk || 'Medium',
+          timeframe: finalTimeframe,
+          signalStrength: parsed.signalStrength || 'متوسطة',
+          explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
+          indicators: {
+            close: latestPrice,
+            rsi: latestRSI,
+            macdLine: latestMACD.MACD || 0,
+            macdSignal: latestMACD.signal || 0,
+          },
+          scoreMetrics: {
+            riskRewardRatio: Number(rrr.toFixed(2)),
+            confluenceScore: 75,
+            aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
+            totalScore: 75,
+            rank: 999,
+          },
+          createdAt,
+          updatedAt: createdAt,
+        });
+
+        await newSignal.save();
 
         resultsSummary.push(`${symbol}: تم التحديث بنجاح كـ (${finalTimeframe})`);
         successCount++;

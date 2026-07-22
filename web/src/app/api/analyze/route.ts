@@ -7,6 +7,22 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 
+function getExpirationDate(timeframe: string, createdAt: Date): Date {
+  const date = new Date(createdAt.getTime());
+  if (timeframe === 'يومي' || timeframe === 'DAY') {
+    date.setHours(date.getHours() + 24);
+  } else if (timeframe === 'أسبوعي' || timeframe === 'WEEK') {
+    date.setDate(date.getDate() + 7);
+  } else if (timeframe === 'شهري' || timeframe === 'MONTH') {
+    date.setDate(date.getDate() + 30);
+  } else if (timeframe === 'استثمار سنوي' || timeframe === 'YEAR') {
+    date.setDate(date.getDate() + 365);
+  } else {
+    date.setHours(date.getHours() + 24);
+  }
+  return date;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -160,43 +176,50 @@ ${timeframePromptContext}
     const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
     const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
 
-    const updatedSignal = await Signal.findOneAndUpdate(
-      { symbol },
-      {
-        $set: {
-          symbol,
-          market,
-          signalType: parsed.signalType || 'HOLD',
-          entryPrice: entry,
-          stopLoss: sl,
-          takeProfit: tp,
-          currentPrice: latestPrice,
-          status: 'Active', // Reset to Active upon live update
-          aiConfidence: parsed.aiConfidence || 'Medium',
-          aiRisk: parsed.aiRisk || 'Medium',
-          timeframe: targetTimeframe,
-          signalStrength: parsed.signalStrength || 'متوسطة',
-          explanationArabic: parsed.explanationArabic || 'تم تحديث التحليل الفني بنجاح.',
-          indicators: {
-            close: latestPrice,
-            rsi: latestRSI,
-            macdLine: latestMACD.MACD || 0,
-            macdSignal: latestMACD.signal || 0,
-          },
-          scoreMetrics: {
-            riskRewardRatio: Number(rrr.toFixed(2)),
-            confluenceScore: 75,
-            aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
-            totalScore: 75,
-            rank: 999,
-          },
-          updatedAt: new Date(),
-        },
-      },
-      { new: true, upsert: true }
+    // Deduplication: before inserting the new signal, find existing active ones for symbol and timeframe, and set to EXPIRED
+    await Signal.updateMany(
+      { symbol, timeframe: targetTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
+      { $set: { status: 'EXPIRED' } }
     );
 
-    return NextResponse.json({ success: true, data: updatedSignal });
+    const createdAt = new Date();
+    const expiresAt = getExpirationDate(targetTimeframe, createdAt);
+
+    const newSignal = new Signal({
+      symbol,
+      market,
+      signalType: parsed.signalType || 'HOLD',
+      entryPrice: entry,
+      stopLoss: sl,
+      takeProfit: tp,
+      currentPrice: latestPrice,
+      status: 'ACTIVE',
+      expiresAt,
+      aiConfidence: parsed.aiConfidence || 'Medium',
+      aiRisk: parsed.aiRisk || 'Medium',
+      timeframe: targetTimeframe,
+      signalStrength: parsed.signalStrength || 'متوسطة',
+      explanationArabic: parsed.explanationArabic || 'تم تحديث التحليل الفني بنجاح.',
+      indicators: {
+        close: latestPrice,
+        rsi: latestRSI,
+        macdLine: latestMACD.MACD || 0,
+        macdSignal: latestMACD.signal || 0,
+      },
+      scoreMetrics: {
+        riskRewardRatio: Number(rrr.toFixed(2)),
+        confluenceScore: 75,
+        aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
+        totalScore: 75,
+        rank: 999,
+      },
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await newSignal.save();
+
+    return NextResponse.json({ success: true, data: newSignal });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

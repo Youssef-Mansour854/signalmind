@@ -12,7 +12,9 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  expiresAt?: string;
+  exitPrice?: number;
   timeframe?: string;
   signalStrength?: 'قوية' | 'متوسطة';
   createdAt: string;
@@ -54,6 +56,7 @@ export default function SwingTradesPage() {
   const [marketFilter, setMarketFilter] = useState<'EGX' | 'US'>('US');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expiredCount, setExpiredCount] = useState<number>(0);
 
   // Execute Modal State
   const [isExecModalOpen, setIsExecModalOpen] = useState(false);
@@ -88,6 +91,7 @@ export default function SwingTradesPage() {
 
       if (signalsJson.success && portfolioJson.success) {
         setSignals(signalsJson.data);
+        setExpiredCount(signalsJson.expiredCount || 0);
         setPortfolio(portfolioJson.data);
       } else {
         setError(signalsJson.error || portfolioJson.error || 'فشل في تحميل البيانات');
@@ -383,10 +387,17 @@ export default function SwingTradesPage() {
 
       {/* Signals List for Swing-Trades */}
       <section className="space-y-4">
-        <h2 className="text-xs font-black uppercase tracking-wider font-mono text-neutral-400 flex items-center gap-2">
-          <span>[ إشارات الفرص الأسبوعية النشطة / SIGNALS ]</span>
-          <span className="text-xs text-neutral-600 font-normal">({sortedSignals.length})</span>
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-xs font-black uppercase tracking-wider font-mono text-neutral-400 flex items-center gap-2">
+            <span>[ إشارات الفرص الأسبوعية النشطة / SIGNALS ]</span>
+            <span className="text-xs text-neutral-600 font-normal">({sortedSignals.length})</span>
+          </h2>
+          {expiredCount > 0 && (
+            <div className="text-[10px] text-neutral-500 font-mono">
+              [ تم إخفاء {expiredCount} إشارة منتهية الصلاحية تلقائياً ]
+            </div>
+          )}
+        </div>
 
         {sortedSignals.length === 0 ? (
           <div className="py-8 text-center text-xs text-neutral-600 border border-neutral-900/60 rounded bg-neutral-950/20">

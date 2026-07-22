@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Portfolio from '@/models/Portfolio';
-import '@/models/Signal'; // Explicitly register Signal model in mongoose memory to avoid population errors
+import Signal from '@/models/Signal';
 
 export async function GET(request: Request) {
   try {
@@ -56,6 +56,10 @@ export async function POST(request: Request) {
     });
 
     await newPortfolioItem.save();
+
+    // Update associated signal's status to EXECUTED
+    await Signal.findByIdAndUpdate(signalId, { $set: { status: 'EXECUTED' } });
+
     return NextResponse.json({ success: true, data: newPortfolioItem }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

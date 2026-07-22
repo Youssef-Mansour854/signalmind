@@ -42,7 +42,7 @@ export async function getCleanedHistory(): Promise<HistoryItem[]> {
 
   // Query closed signals - explicitly exclude HOLD signals
   const closedSignals = await Signal.find({
-    status: { $in: ['Hit TP', 'Hit SL', 'CLOSED'] },
+    status: { $in: ['Hit TP', 'Hit SL', 'CLOSED', 'EXPIRED', 'EXECUTED'] },
     signalType: { $ne: 'HOLD' }
   });
 
@@ -56,7 +56,7 @@ export async function getCleanedHistory(): Promise<HistoryItem[]> {
     if (s.signalType === 'HOLD') continue;
 
     const entryPrice = s.entryPrice || 0;
-    const exitPrice = s.exitPrice ?? s.exit_price ?? s.closedPrice ?? s.closed_price ?? (s.status === 'Hit TP' ? s.takeProfit : (s.status === 'Hit SL' ? s.stopLoss : (s.closedAt ? s.currentPrice : undefined)));
+    const exitPrice = s.exitPrice ?? s.exit_price ?? s.closedPrice ?? s.closed_price ?? (s.status === 'Hit TP' ? s.takeProfit : (s.status === 'Hit SL' ? s.stopLoss : (s.status === 'EXECUTED' ? s.takeProfit : (s.closedAt ? s.currentPrice : undefined))));
 
     // Require valid entryPrice > 0 and definitive exitPrice > 0
     if (!entryPrice || entryPrice <= 0 || exitPrice === undefined || exitPrice === null || exitPrice <= 0) {

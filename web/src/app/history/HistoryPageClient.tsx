@@ -12,7 +12,9 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  expiresAt?: string;
+  exitPrice?: number;
   timeframe?: string;
   signalStrength?: 'قوية' | 'متوسطة';
   createdAt: string;
@@ -96,8 +98,8 @@ export default function HistoryPage() {
       const json = await res.json();
       if (json.success) {
         const closed = json.data || [];
-        const wins = closed.filter((s: any) => s.status === 'Hit TP');
-        const losses = closed.filter((s: any) => s.status === 'Hit SL');
+        const wins = closed.filter((s: any) => s.status === 'Hit TP' || (s.status === 'EXECUTED' && (s.pnlPercentage || 0) > 0));
+        const losses = closed.filter((s: any) => s.status === 'Hit SL' || (s.status === 'EXECUTED' && (s.pnlPercentage || 0) <= 0));
         
         const totalWins = wins.length;
         const totalLosses = losses.length;
@@ -115,7 +117,7 @@ export default function HistoryPage() {
           profitFactor = '∞';
         }
         
-        const rrrSignals = closed.filter((s: any) => s.status !== 'Expired' && s.scoreMetrics?.riskRewardRatio > 0);
+        const rrrSignals = closed.filter((s: any) => s.status !== 'Expired' && s.status !== 'EXPIRED' && s.scoreMetrics?.riskRewardRatio > 0);
         const avgRRR = rrrSignals.length > 0 
           ? (rrrSignals.reduce((acc: number, s: any) => acc + (s.scoreMetrics.riskRewardRatio || 0), 0) / rrrSignals.length).toFixed(2)
           : '0.00';
@@ -201,7 +203,9 @@ export default function HistoryPage() {
   };
 
   const getExitPrice = (signal: Signal) => {
-    return signal.status === 'Hit TP'
+    return signal.exitPrice !== undefined
+      ? signal.exitPrice
+      : signal.status === 'Hit TP'
       ? signal.takeProfit
       : signal.status === 'Hit SL'
       ? signal.stopLoss
@@ -209,13 +213,14 @@ export default function HistoryPage() {
   };
 
   const formatCloseReason = (reason?: string, status?: string) => {
-    const activeReason = reason || (status === 'Hit TP' ? 'TP Hit' : status === 'Hit SL' ? 'SL Hit' : status === 'Expired' ? 'Expired' : '');
+    const activeReason = reason || (status === 'Hit TP' ? 'TP Hit' : status === 'Hit SL' ? 'SL Hit' : status === 'Expired' || status === 'EXPIRED' ? 'Expired' : status === 'EXECUTED' ? 'Executed' : '');
     if (!activeReason) return 'غير محدد';
     const mapping: Record<string, string> = {
       'TP Hit': 'ضرب الهدف (TP)',
       'TP Hit (BE)': 'تأمين التعادل (BE)',
       'SL Hit': 'وقف الخسارة (SL)',
       'Expired': 'منتهية الصلاحية',
+      'Executed': 'تم التنفيذ',
       'Manual Close': 'إغلاق يدوي'
     };
     return mapping[activeReason] || activeReason;

@@ -12,7 +12,9 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  expiresAt?: string;
+  exitPrice?: number;
   timeframe?: string;
   signalStrength?: 'قوية' | 'متوسطة';
   createdAt: string;
