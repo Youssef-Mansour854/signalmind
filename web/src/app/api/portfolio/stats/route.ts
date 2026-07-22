@@ -6,6 +6,9 @@ import Setting from '@/models/Setting';
 import '@/models/Signal';
 import { scrapeEGXLivePrice } from '@/utils/marketFetcher';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const yahooFinance = new YahooFinance();
 
 const getTimeframeStartDate = (tf: string): Date | null => {
@@ -223,10 +226,19 @@ export async function GET(request: Request) {
 
     console.log("[Portfolio Stats API Output]", payload);
 
-    return NextResponse.json({
-      success: true,
-      data: payload,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: payload,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("Error fetching portfolio stats:", error);

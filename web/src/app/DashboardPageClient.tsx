@@ -163,7 +163,13 @@ export default function DashboardPage() {
   const fetchPortfolioStats = async (pType = portfolioType, tf = timeframe, mFilter = marketFilter) => {
     setStatsLoading(true);
     try {
-      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}&market=${mFilter}`);
+      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}&market=${mFilter}`, {
+        cache: 'no-store',
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache'
+        }
+      });
       if (!res.ok) {
         console.error("API returned an error:", res.status);
         return;
@@ -174,6 +180,7 @@ export default function DashboardPage() {
         return;
       }
       const json = await res.json();
+      console.log("[Frontend UI Received Stats]:", json?.data);
       if (json.success && json.data) {
         setPortfolioStats(json.data);
       }
@@ -367,6 +374,8 @@ export default function DashboardPage() {
       </div>
     );
   };
+
+  console.log("Frontend UI Received Stats:", portfolioStats);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
