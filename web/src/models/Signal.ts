@@ -13,7 +13,7 @@ export interface ISignal extends Document {
   maxPriceReached: number;
   
   // Status and tracking
-  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired' | 'SUCCESS' | 'FAILED';
   expiresAt?: Date;
   exitPrice?: number;
   isNearTP: boolean; // Flagged when price reaches 90% towards TP
@@ -76,7 +76,7 @@ const SignalSchema = new Schema<ISignal>(
     maxPriceReached: { type: Number, default: 0 },
     status: { 
       type: String, 
-      enum: ['ACTIVE', 'EXPIRED', 'EXECUTED'], 
+      enum: ['ACTIVE', 'EXPIRED', 'EXECUTED', 'Pending', 'Active', 'Hit TP', 'Hit SL', 'Expired', 'SUCCESS', 'FAILED'], 
       default: 'ACTIVE',
       index: true 
     },
