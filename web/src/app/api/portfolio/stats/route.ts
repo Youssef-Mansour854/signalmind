@@ -126,9 +126,10 @@ export async function GET(request: Request) {
       totalFees += (cp.brokerFees || 0);
     }
 
-    const unrealizedPnL = currentStocksValue - totalInvestedCost;
-    // Available cash = Initial balance minus invested capital plus realized PnL
-    const availableCash = initialBalance - totalInvestedCost + realizedPnL;
+    const costBasis = totalInvestedCost;
+    const unrealizedPnL = currentStocksValue - costBasis;
+    // Available cash = Initial balance minus static cost basis plus realized PnL (Stays stable during tick fluctuations)
+    const availableCash = initialBalance - costBasis + realizedPnL;
     // Total Equity = Available cash + current stocks value = Initial balance + realized PnL + unrealized PnL
     const totalPortfolioValue = availableCash + currentStocksValue;
     
@@ -190,8 +191,9 @@ export async function GET(request: Request) {
       data: {
         portfolioType: type,
         timeframe,
-        availableCash,
-        totalInvestedCost: Number(totalInvestedCost.toFixed(2)),
+        availableCash: Number(availableCash.toFixed(2)),
+        totalInvestedCost: Number(currentStocksValue.toFixed(2)), // Dynamically fluctuates with live market value
+        costBasis: Number(costBasis.toFixed(2)), // Static initial position cost
         currentStocksValue: Number(currentStocksValue.toFixed(2)),
         realizedPnL: Number(realizedPnL.toFixed(2)),
         unrealizedPnL: Number(unrealizedPnL.toFixed(2)),
