@@ -6,6 +6,7 @@ import { Groq } from 'groq-sdk';
 import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
+import { fetchMarketData, StaleDataError } from '@/utils/marketFetcher';
 
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
@@ -118,59 +119,9 @@ export async function POST(request: Request) {
     for (const item of watchlist) {
       const { symbol, market } = item;
       try {
-        // 1. Fetch Yahoo Finance historical data (last 6 months)
-        let yfSymbol = symbol;
-        if (market === 'EGX' && !symbol.endsWith('.CA')) {
-          yfSymbol = `${symbol}.CA`;
-        }
-
-        const today = new Date();
-        const daysBack = isMacro ? 365 : 180;
-        const pastDate = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
-        const period1 = Math.floor(pastDate.getTime() / 1000);
-        const period2 = Math.floor(today.getTime() / 1000);
-
-        const historicalData = (await yahooFinance.historical(yfSymbol, {
-          period1,
-          period2,
-          interval: '1d',
-        })) as any[];
-
-        if (!historicalData || historicalData.length === 0) {
-          resultsSummary.push(`${symbol}: لم يتم العثور على بيانات فنية`);
-          continue;
-        }
-
-        const closes = historicalData
-          .map((bar) => bar.close)
-          .filter((c): c is number => typeof c === 'number' && c > 0);
-
-        if (closes.length < 26) {
-          resultsSummary.push(`${symbol}: بيانات غير كافية لحساب المؤشرات`);
-          continue;
-        }
-
-        const latestPrice = closes[closes.length - 1];
-
-        // 2. Compute Technical Indicators
-        const rsiValues = RSI.calculate({ values: closes, period: 14 });
-        const latestRSI = rsiValues[rsiValues.length - 1] ?? 50;
-
-        const macdValues = MACD.calculate({
-          values: closes,
-          fastPeriod: 12,
-          slowPeriod: 26,
-          signalPeriod: 9,
-          SimpleMAOscillator: false,
-          SimpleMASignal: false,
-        });
-        const latestMACD = macdValues[macdValues.length - 1] || { MACD: 0, signal: 0, histogram: 0 };
-
-        const ema50Values = closes.length >= 50 ? EMA.calculate({ values: closes, period: 50 }) : [];
-        const latestEMA50 = ema50Values.length > 0 ? ema50Values[ema50Values.length - 1] : latestPrice;
-
-        const ema200Values = closes.length >= 200 ? EMA.calculate({ values: closes, period: 200 }) : [];
-        const latestEMA200 = ema200Values.length > 0 ? ema200Values[ema200Values.length - 1] : latestPrice;
+        // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
+        const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
+        const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
 
         // 3. Setup prompt based on routine
         let prompt = '';
@@ -334,8 +285,13 @@ export async function POST(request: Request) {
         await delay(1000);
 
       } catch (err: any) {
-        console.error(`Error scanning ${symbol}:`, err);
-        resultsSummary.push(`${symbol}: خطأ (${err.message})`);
+        if (err instanceof StaleDataError) {
+          console.warn(`[Guard] Skipped ${symbol} due to stale data: ${err.message}`);
+          resultsSummary.push(`${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`);
+        } else {
+          console.error(`Error scanning ${symbol}:`, err);
+          resultsSummary.push(`${symbol}: خطأ (${err.message})`);
+        }
       }
     }
 
