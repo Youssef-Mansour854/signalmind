@@ -78,18 +78,21 @@ export default function DashboardPage() {
   };
 
   const [isScanning, setIsScanning] = useState(false);
+  const [activeRoutine, setActiveRoutine] = useState<'OPENING_BELL' | 'MACRO_SCAN' | null>(null);
   const [scannerResult, setScannerResult] = useState<string | null>(null);
 
-  const handleRunScanner = async (isAutoInput?: boolean | React.MouseEvent) => {
-    const isAuto = typeof isAutoInput === 'boolean' ? isAutoInput : false;
+  const handleRunScanner = async (routine: 'OPENING_BELL' | 'MACRO_SCAN' = 'OPENING_BELL', isAuto = false) => {
     setIsScanning(true);
+    setActiveRoutine(routine);
     setScannerResult(null);
     try {
       const res = await fetch('/api/scanner/run?manual=true', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'x-manual-trigger': 'true'
-        }
+        },
+        body: JSON.stringify({ routine })
       });
       const json = await res.json();
       if (json.success) {
@@ -104,6 +107,7 @@ export default function DashboardPage() {
       if (!isAuto) alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
     } finally {
       setIsScanning(false);
+      setActiveRoutine(null);
     }
   };
 
@@ -211,7 +215,7 @@ export default function DashboardPage() {
     if (msRemaining !== null && msRemaining > 0) {
       console.log(`[AUTO-PILOT] Scheduled market open scanner in ${(msRemaining / 1000).toFixed(1)} seconds.`);
       const timer = setTimeout(() => {
-        handleRunScanner(true);
+        handleRunScanner('OPENING_BELL', true);
       }, msRemaining);
 
       return () => clearTimeout(timer);
@@ -368,25 +372,42 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Run Market Scanner Button */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Opening Bell Scanner Button */}
           <button
-            onClick={() => handleRunScanner(false)}
+            onClick={() => handleRunScanner('OPENING_BELL', false)}
             disabled={isScanning}
             className="px-3 py-1.5 text-xs font-bold bg-neutral-900 hover:bg-neutral-850 text-white border border-neutral-800 rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
           >
-            {isScanning ? (
+            {isScanning && activeRoutine === 'OPENING_BELL' ? (
               <>
                 <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>جاري مسح السوق...</span>
+                <span>مسح الافتتاح...</span>
               </>
             ) : (
+              <span>⚡ رادار الافتتاح</span>
+            )}
+          </button>
+
+          {/* Macro Scan Button */}
+          <button
+            onClick={() => handleRunScanner('MACRO_SCAN', false)}
+            disabled={isScanning}
+            className="px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-neutral-200 border border-white rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
+          >
+            {isScanning && activeRoutine === 'MACRO_SCAN' ? (
               <>
-                <span>تشغيل رادار السوق 🌍</span>
+                <svg className="animate-spin h-3.5 w-3.5 text-black" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>تحليل الفرص الكبرى...</span>
               </>
+            ) : (
+              <span>🏛️ مسح الفرص الكبرى</span>
             )}
           </button>
 

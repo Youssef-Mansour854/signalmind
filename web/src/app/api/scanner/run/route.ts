@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 const yahooFinance = new YahooFinance();
-import { RSI, MACD } from 'technicalindicators';
+import { RSI, MACD, EMA } from 'technicalindicators';
 import { Groq } from 'groq-sdk';
 import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
@@ -23,12 +23,24 @@ function getExpirationDate(timeframe: string, createdAt: Date): Date {
   return date;
 }
 
-const WATCHLIST = [
+const OPENING_WATCHLIST = [
   { symbol: 'AAPL', market: 'US' },
   { symbol: 'MSFT', market: 'US' },
   { symbol: 'TSLA', market: 'US' },
   { symbol: 'NVDA', market: 'US' },
   { symbol: 'META', market: 'US' }
+];
+
+const MACRO_WATCHLIST = [
+  { symbol: 'AAPL', market: 'US' },
+  { symbol: 'MSFT', market: 'US' },
+  { symbol: 'TSLA', market: 'US' },
+  { symbol: 'NVDA', market: 'US' },
+  { symbol: 'SPY', market: 'US' },
+  { symbol: 'QQQ', market: 'US' },
+  { symbol: 'KO', market: 'US' },
+  { symbol: 'JNJ', market: 'US' },
+  { symbol: 'AMD', market: 'US' }
 ];
 
 // Helper delay to avoid rate limiting
@@ -84,10 +96,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'GROQ_API_KEYS غير معرّف في خادم الويب.' }, { status: 500 });
     }
 
+    let routine: 'OPENING_BELL' | 'MACRO_SCAN' = 'OPENING_BELL';
+    try {
+      const body = await request.clone().json();
+      if (body?.routine === 'MACRO_SCAN' || body?.routine === 'OPENING_BELL') {
+        routine = body.routine;
+      }
+    } catch {
+      const urlRoutine = new URL(request.url).searchParams.get('routine');
+      if (urlRoutine === 'MACRO_SCAN') {
+        routine = 'MACRO_SCAN';
+      }
+    }
+
+    const watchlist = routine === 'MACRO_SCAN' ? MACRO_WATCHLIST : OPENING_WATCHLIST;
+    const isMacro = routine === 'MACRO_SCAN';
+
     const resultsSummary: string[] = [];
     let successCount = 0;
 
-    for (const item of WATCHLIST) {
+    for (const item of watchlist) {
       const { symbol, market } = item;
       try {
         // 1. Fetch Yahoo Finance historical data (last 6 months)
@@ -97,8 +125,9 @@ export async function POST(request: Request) {
         }
 
         const today = new Date();
-        const sixMonthsAgo = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000);
-        const period1 = Math.floor(sixMonthsAgo.getTime() / 1000);
+        const daysBack = isMacro ? 365 : 180;
+        const pastDate = new Date(today.getTime() - daysBack * 24 * 60 * 60 * 1000);
+        const period1 = Math.floor(pastDate.getTime() / 1000);
         const period2 = Math.floor(today.getTime() / 1000);
 
         const historicalData = (await yahooFinance.historical(yfSymbol, {
@@ -137,8 +166,44 @@ export async function POST(request: Request) {
         });
         const latestMACD = macdValues[macdValues.length - 1] || { MACD: 0, signal: 0, histogram: 0 };
 
-        // 3. Setup prompt allowing AI to dynamically select the best timeframe
-        const prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
+        const ema50Values = closes.length >= 50 ? EMA.calculate({ values: closes, period: 50 }) : [];
+        const latestEMA50 = ema50Values.length > 0 ? ema50Values[ema50Values.length - 1] : latestPrice;
+
+        const ema200Values = closes.length >= 200 ? EMA.calculate({ values: closes, period: 200 }) : [];
+        const latestEMA200 = ema200Values.length > 0 ? ema200Values[ema200Values.length - 1] : latestPrice;
+
+        // 3. Setup prompt based on routine
+        let prompt = '';
+        if (isMacro) {
+          prompt = `أنت خبير استراتيجيات الاستثمار الكلي والتحليل الفني الهيكلي للمدى البعيد.
+قم بتحليل الاتجاه الهيكلي لسهم/صندوق ${symbol} (سوق: ${market}) بناءً على البيانات الفنية التاريخية (لمدة سنة كاملة):
+- السعر الحالي: ${latestPrice.toFixed(2)}
+- مؤشر RSI (14): ${latestRSI.toFixed(2)}
+- مؤشر MACD Line: ${latestMACD.MACD?.toFixed(4) || '0.00'}
+- المتوسط المتحرك الأسّي 50 يوماً (EMA 50): ${latestEMA50.toFixed(2)}
+- المتوسط المتحرك الأسّي 200 يوماً (EMA 200): ${latestEMA200.toFixed(2)}
+
+تعليمات تحليلية صارمة للمدى البعيد (MACRO SCAN):
+1. قم بتجاهل الضوضاء والتقلبات اللحظية بالكامل.
+2. ركز بدقة على الهيكل العام للسوق (Market Structure)، التجميع والقيعان الرئيسية، وتقاطعات ومستويات EMA 50 و EMA 200.
+3. يجب أن تختار الإطار الزمني حصرياً من بين 3 خيارات فقط: "أسبوعي" (WEEK)، "شهري" (MONTH)، أو "استثمار سنوي" (YEAR).
+4. يمنع منعاً باتاً اختيار "يومي" (DAY).
+
+يجب أن تقوم بالرد بصيغة JSON فقط دون أي نصوص أو تعليقات خارج الـ JSON.
+يجب أن تحتوي صيغة الـ JSON على الحقول التالية بدقة:
+{
+  "signalType": "BUY" | "SELL" | "HOLD",
+  "entryPrice": number (سعر الدخول المقترح بناءً على مناطق الدعم والتجميع الهيكلية),
+  "stopLoss": number (سعر وقف الخسارة المقترح بدقة),
+  "takeProfit": number (سعر الهدف الاستثماري المقترح لجني الأرباح),
+  "aiConfidence": "High" | "Medium" | "Low",
+  "aiRisk": "High" | "Medium" | "Low",
+  "timeframe": "أسبوعي" | "شهري" | "استثمار سنوي",
+  "signalStrength": "قوية" | "متوسطة",
+  "explanationArabic": "تحليل فني هيكلي استثماري دقيق باللغة العربية يشرح سبب اتخاذ هذا القرار والتوجه الكلي للرمز بناء على EMA 50/200 والمؤشرات المذكورة."
+}`;
+        } else {
+          prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
 قم بتحليل البيانات الفنية الحالية لسهم ${symbol} (سوق: ${market}) واكتب توصية تداول دقيقة باللغة العربية بناءً على المعطيات التالية:
 - السعر الحالي: ${latestPrice.toFixed(2)}
 - مؤشر القوة النسبية RSI (14): ${latestRSI.toFixed(2)}
@@ -166,6 +231,7 @@ export async function POST(request: Request) {
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني مختصر ومقنع باللغة العربية يشرح سبب اتخاذ هذا القرار الفني بالاعتماد على المؤشرات المذكورة (RSI, MACD) ومستويات الدعم والمقاومة، وسبب اختيار هذا الإطار الزمني بالذات."
 }`;
+        }
 
         // 4. Query AI using rotated keys
         let content = '';
@@ -203,8 +269,10 @@ export async function POST(request: Request) {
         const parsed = JSON.parse(content);
 
         // Normalize timeframe
-        let finalTimeframe = parsed.timeframe || 'يومي';
-        if (finalTimeframe === 'DAY' || finalTimeframe === 'day') finalTimeframe = 'يومي';
+        let finalTimeframe = parsed.timeframe || (isMacro ? 'أسبوعي' : 'يومي');
+        if (finalTimeframe === 'DAY' || finalTimeframe === 'day') {
+          finalTimeframe = isMacro ? 'أسبوعي' : 'يومي';
+        }
         if (finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
         if (finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
         if (finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
@@ -273,7 +341,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `اكتمل مسح رادار السوق بنجاح. تم توليد وتحديث ${successCount} إشارات من أصل ${WATCHLIST.length}.`,
+      message: `اكتمل مسح ${isMacro ? 'الفرص الاستثمارية الكبرى (MACRO SCAN)' : 'رادار الافتتاح (OPENING BELL)'} بنجاح. تم توليد وتحديث ${successCount} إشارات من أصل ${watchlist.length}.`,
+      routine,
       summary: resultsSummary
     });
 
