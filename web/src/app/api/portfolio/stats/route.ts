@@ -22,6 +22,60 @@ const getTimeframeStartDate = (tf: string): Date | null => {
   return null; // 'all'
 };
 
+async function fetchResilientLivePrice(symbol: string, market: 'US' | 'EGX'): Promise<number | null> {
+  const cleanSymbol = symbol.replace(/\.CA$/i, '').trim();
+  const yfSymbol = market === 'EGX' ? `${cleanSymbol}.CA` : symbol;
+
+  // 1. Try Yahoo Finance Library
+  try {
+    const q = await yahooFinance.quote(yfSymbol) as any;
+    const price = q?.regularMarketPrice || q?.postMarketPrice || q?.close;
+    if (price && typeof price === 'number' && price > 0) {
+      console.log(`[Live Price SUCCESS - Yahoo Lib] ${symbol}: ${price}`);
+      return price;
+    }
+  } catch (err: any) {
+    console.warn(`[Vercel Live Price Warning] Yahoo Lib failed for ${symbol}:`, err?.message || err);
+  }
+
+  // 2. Try Yahoo Finance Direct REST Fetch (resilient HTTP fetch with User-Agent)
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yfSymbol)}?interval=1d&range=1d`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      const price = meta?.regularMarketPrice || meta?.chartPreviousClose;
+      if (price && typeof price === 'number' && price > 0) {
+        console.log(`[Live Price SUCCESS - Yahoo Direct Fetch] ${symbol}: ${price}`);
+        return price;
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[Vercel Live Price Warning] Yahoo Direct Fetch failed for ${symbol}:`, err?.message || err);
+  }
+
+  // 3. Try Google Finance Scraper
+  try {
+    const egxPrice = await scrapeEGXLivePrice(symbol);
+    if (egxPrice && typeof egxPrice === 'number' && egxPrice > 0) {
+      console.log(`[Live Price SUCCESS - Google Finance] ${symbol}: ${egxPrice}`);
+      return egxPrice;
+    }
+  } catch (err: any) {
+    console.error(`[Vercel Live Price Error] Failed for ${symbol}:`, err?.message || err);
+  }
+
+  console.error(`[Vercel Live Price Error] All resilient price fetchers failed for ${symbol}`);
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     await dbConnect();
@@ -58,35 +112,24 @@ export async function GET(request: Request) {
       realizedPnL += (cp.finalPnL !== undefined ? cp.finalPnL : 0);
     }
 
-    // 4. Get unique symbols and fetch live prices via yahoo-finance2
+    // 4. Get unique symbols and fetch live prices via resilient multi-tier fetcher
     const symbolMap: Record<string, number> = {};
 
     if (activePositions.length > 0) {
-      const symbolsToFetch = Array.from(new Set(activePositions.map((pos) => {
-        let yfSymbol = pos.symbol;
-        if (pos.market === 'EGX' && !yfSymbol.endsWith('.CA')) {
-          yfSymbol = `${yfSymbol}.CA`;
-        }
-        return { symbol: pos.symbol, yfSymbol, market: pos.market };
-      })));
+      const symbolsToFetch = Array.from(new Set(activePositions.map((pos) => ({
+        symbol: pos.symbol,
+        market: pos.market
+      }))));
 
       await Promise.all(
-        symbolsToFetch.map(async ({ symbol, yfSymbol, market: itemMarket }) => {
+        symbolsToFetch.map(async ({ symbol, market: itemMarket }) => {
           try {
-            if (itemMarket === 'EGX') {
-              const liveEgxPrice = await scrapeEGXLivePrice(symbol);
-              if (liveEgxPrice && typeof liveEgxPrice === 'number' && liveEgxPrice > 0) {
-                symbolMap[symbol] = liveEgxPrice;
-                return;
-              }
-            }
-            const q = await yahooFinance.quote(yfSymbol) as any;
-            const price = q?.regularMarketPrice || q?.postMarketPrice || q?.close;
-            if (price && typeof price === 'number') {
+            const price = await fetchResilientLivePrice(symbol, itemMarket);
+            if (price && price > 0) {
               symbolMap[symbol] = price;
             }
-          } catch (err) {
-            console.warn(`[WARNING] Failed live price fetch for ${yfSymbol}:`, err);
+          } catch (err: any) {
+            console.error(`[Vercel Live Price Error] Failed for ${symbol}:`, err?.message || err);
           }
         })
       );
@@ -101,9 +144,13 @@ export async function GET(request: Request) {
       const size = pos.positionSize || 0;
       const qty = pos.quantity || (entry > 0 ? size / entry : 0);
       const signalPrice = pos.signalId && typeof pos.signalId === 'object' && 'currentPrice' in pos.signalId ? Number((pos.signalId as any).currentPrice) : 0;
-      const livePrice = symbolMap[pos.symbol] || (signalPrice > 0 ? signalPrice : pos.currentPrice) || entry;
+      
+      const liveMarketPrice = symbolMap[pos.symbol];
+      const livePrice = (liveMarketPrice && liveMarketPrice > 0)
+        ? liveMarketPrice
+        : (signalPrice > 0 ? signalPrice : (pos.currentPrice > 0 ? pos.currentPrice : entry));
 
-      // OVERRIDE stale DB currentPrice with live market price
+      // OVERRIDE DB currentPrice with live market price
       pos.currentPrice = livePrice;
 
       const itemCostBasis = entry * qty;
