@@ -163,11 +163,14 @@ export default function DashboardPage() {
   const fetchPortfolioStats = async (pType = portfolioType, tf = timeframe, mFilter = marketFilter) => {
     setStatsLoading(true);
     try {
-      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}&market=${mFilter}`, {
+      const timestamp = Date.now();
+      const res = await fetch(`/api/portfolio/stats?type=${pType}&timeframe=${tf}&market=${mFilter}&t=${timestamp}`, {
+        method: 'GET',
         cache: 'no-store',
         headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache'
+          'Expires': '0'
         }
       });
       if (!res.ok) {
