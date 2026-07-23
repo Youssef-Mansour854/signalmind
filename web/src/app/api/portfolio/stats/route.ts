@@ -100,7 +100,12 @@ export async function GET(request: Request) {
       const entry = pos.actualEntryPrice || 0;
       const size = pos.positionSize || 0;
       const qty = pos.quantity || (entry > 0 ? size / entry : 0);
-      const livePrice = symbolMap[pos.symbol] || pos.currentPrice || entry;
+      const signalPrice = pos.signalId && typeof pos.signalId === 'object' && 'currentPrice' in pos.signalId ? Number((pos.signalId as any).currentPrice) : 0;
+      const livePrice = symbolMap[pos.symbol] || (signalPrice > 0 ? signalPrice : pos.currentPrice) || entry;
+
+      // OVERRIDE stale DB currentPrice with live market price
+      pos.currentPrice = livePrice;
+
       const itemCostBasis = entry * qty;
       const itemValue = livePrice * qty;
       const itemPnL = itemValue - itemCostBasis;
@@ -116,6 +121,7 @@ export async function GET(request: Request) {
         actualEntryPrice: entry,
         positionSize: size,
         quantity: qty,
+        currentPrice: livePrice,
         livePrice,
         itemValue,
         itemPnL,
