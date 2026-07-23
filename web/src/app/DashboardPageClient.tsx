@@ -419,12 +419,13 @@ export default function DashboardPage() {
   // Client-Side Recalculation for Live Accuracy
   const accurateCash = portfolioStats?.availableCash || 0;
 
-  const { liveInvestedCapital, liveTotalEquity, liveTotalPnL } = React.useMemo(() => {
+  const { liveInvestedCapital, liveTotalEquity, liveTotalPnL, liveTotalPnLPercentage } = React.useMemo(() => {
     if (!portfolioStats) {
       return {
         liveInvestedCapital: 0,
         liveTotalEquity: 0,
         liveTotalPnL: 0,
+        liveTotalPnLPercentage: 0,
       };
     }
 
@@ -444,12 +445,18 @@ export default function DashboardPage() {
       });
 
       const realized = portfolioStats.realizedPnL || 0;
-      const totalPnLVal = calcFloatingPnL + realized;
+      const finalLiveTotalPnL = calcFloatingPnL + realized;
+
+      // Starting balance is current equity minus total PnL
+      const currentEquity = accurateCash + calcInvested;
+      const startingBalance = currentEquity - finalLiveTotalPnL;
+      const calculatedPct = startingBalance > 0 ? (finalLiveTotalPnL / startingBalance) * 100 : 0;
 
       return {
         liveInvestedCapital: calcInvested,
-        liveTotalEquity: accurateCash + calcInvested,
-        liveTotalPnL: totalPnLVal,
+        liveTotalEquity: currentEquity,
+        liveTotalPnL: finalLiveTotalPnL,
+        liveTotalPnLPercentage: calculatedPct,
       };
     }
 
@@ -457,6 +464,7 @@ export default function DashboardPage() {
       liveInvestedCapital: portfolioStats.investedCapital || 0,
       liveTotalEquity: portfolioStats.totalPortfolioValue || 0,
       liveTotalPnL: portfolioStats.totalPnL || 0,
+      liveTotalPnLPercentage: portfolioStats.totalProfitLossPercentage || 0,
     };
   }, [portfolioStats, accurateCash, livePrices]);
 
@@ -810,8 +818,8 @@ export default function DashboardPage() {
                     {formatCurrency(liveTotalPnL)}
                   </span>
                   <span className={`text-xs font-mono font-bold dir-ltr ${liveTotalPnL >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                    ({(portfolioStats?.totalProfitLossPercentage || 0) >= 0 ? '+' : ''}
-                    {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
+                    ({liveTotalPnLPercentage >= 0 ? '+' : ''}
+                    {liveTotalPnLPercentage.toFixed(2)}%)
                   </span>
                 </div>
               )}
