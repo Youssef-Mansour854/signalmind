@@ -7,6 +7,7 @@ import '@/models/Signal';
 import { scrapeEGXLivePrice } from '@/utils/marketFetcher';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
 const yahooFinance = new YahooFinance();
