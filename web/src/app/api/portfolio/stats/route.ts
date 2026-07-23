@@ -92,15 +92,13 @@ export async function GET(request: Request) {
       );
     }
 
-    // 5. Compute metrics according to strict accounting rules:
-    // costBasis = Sum(entry * quantity) for ACTIVE positions (Static cost basis)
-    // currentPositionValue = Sum(livePrice * quantity) for ACTIVE positions (Dynamic market value)
-    let costBasis = 0;
-    let currentPositionValue = 0;
+    // 5. Compute metrics according to strict financial accounting rules:
+    let costBasisOpen = 0;
+    let currentValueOpen = 0;
 
     const positionsDetail = activePositions.map((pos) => {
-      const entry = pos.actualEntryPrice;
-      const size = pos.positionSize;
+      const entry = pos.actualEntryPrice || 0;
+      const size = pos.positionSize || 0;
       const qty = pos.quantity || (entry > 0 ? size / entry : 0);
       const livePrice = symbolMap[pos.symbol] || pos.currentPrice || entry;
       const itemCostBasis = entry * qty;
@@ -108,8 +106,8 @@ export async function GET(request: Request) {
       const itemPnL = itemValue - itemCostBasis;
       const itemPnLPct = itemCostBasis > 0 ? (itemPnL / itemCostBasis) * 100 : 0;
 
-      costBasis += itemCostBasis;
-      currentPositionValue += itemValue;
+      costBasisOpen += itemCostBasis;
+      currentValueOpen += itemValue;
 
       return {
         _id: pos._id,
@@ -133,20 +131,22 @@ export async function GET(request: Request) {
       totalFees += (cp.brokerFees || 0);
     }
 
-    // Separate PnL Calculations
-    const unrealizedPnL = currentPositionValue - costBasis;
+    const costBasis = costBasisOpen;
+    const currentPositionValue = currentValueOpen;
+    const unrealizedPnL = currentValueOpen - costBasisOpen;
+    const realizedPnlClosed = realizedPnL;
     
-    // Strict Accounting Financial Rules:
-    // 1. Available Cash = InitialBalance - costBasis + realizedPnL (Static during open trades, floating PnL excluded)
-    const availableCash = initialBalance - costBasis + realizedPnL;
+    // Strict Financial Math:
+    // 1. Cash is ONLY affected by costBasisOpen spent and realizedPnlClosed gained/lost. Floating PnL is EXCLUDED.
+    const availableCash = initialBalance - costBasisOpen + realizedPnlClosed;
     
-    // 2. Invested Capital = currentPositionValue (Dynamic, absorbs floating unrealized PnL)
-    const investedCapital = currentPositionValue;
+    // 2. Invested Capital = currentValueOpen (Dynamic, absorbs floating unrealized PnL)
+    const investedCapital = currentValueOpen;
     
-    // 3. Total Equity = Available Cash + investedCapital (equals InitialBalance + realizedPnL + unrealizedPnL)
-    const totalPortfolioValue = availableCash + investedCapital;
+    // 3. Total Equity = availableCash + currentValueOpen (equals initialBalance + realizedPnlClosed + unrealizedPnL)
+    const totalPortfolioValue = availableCash + currentValueOpen;
     
-    const totalPnL = unrealizedPnL + realizedPnL - totalFees;
+    const totalPnL = unrealizedPnL + realizedPnlClosed - totalFees;
     const totalProfitLossPercentage = totalDeposits > 0 ? (totalPnL / totalDeposits) * 100 : 0;
 
     let maxDailyDrawdownLimit = 5;
