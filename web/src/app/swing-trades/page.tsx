@@ -63,6 +63,38 @@ export default function SwingTradesPage() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [actualEntryPrice, setActualEntryPrice] = useState<number>(0);
   const [positionSize, setPositionSize] = useState<string>('');
+  const [execQuantity, setExecQuantity] = useState<string>('');
+
+  const handleValueChange = (val: string) => {
+    setPositionSize(val);
+    const numVal = parseFloat(val);
+    const numPrice = typeof actualEntryPrice === 'number' ? actualEntryPrice : parseFloat(String(actualEntryPrice));
+    if (numVal > 0 && numPrice > 0) {
+      setExecQuantity((numVal / numPrice).toFixed(4));
+    } else {
+      setExecQuantity('');
+    }
+  };
+
+  const handleQuantityChange = (val: string) => {
+    setExecQuantity(val);
+    const numQty = parseFloat(val);
+    const numPrice = typeof actualEntryPrice === 'number' ? actualEntryPrice : parseFloat(String(actualEntryPrice));
+    if (numQty > 0 && numPrice > 0) {
+      setPositionSize((numQty * numPrice).toFixed(2));
+    } else {
+      setPositionSize('');
+    }
+  };
+
+  const handlePriceChange = (priceVal: number) => {
+    setActualEntryPrice(priceVal);
+    const numPrice = priceVal;
+    const numValue = parseFloat(positionSize);
+    if (numPrice > 0 && numValue > 0) {
+      setExecQuantity((numValue / numPrice).toFixed(4));
+    }
+  };
 
   // Close Modal State
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -120,7 +152,8 @@ export default function SwingTradesPage() {
           symbol: selectedSignal.symbol,
           market: selectedSignal.market,
           actualEntryPrice,
-          positionSize: Number(positionSize)
+          positionSize: Number(positionSize),
+          quantity: execQuantity ? Number(execQuantity) : undefined
         })
       });
 
@@ -469,6 +502,7 @@ export default function SwingTradesPage() {
                             setSelectedSignal(signal);
                             setActualEntryPrice(signal.entryPrice);
                             setPositionSize('');
+                            setExecQuantity('');
                             setIsExecModalOpen(true);
                           }}
                           className={`px-3 py-1.5 text-[10px] font-bold rounded cursor-pointer transition ${
@@ -505,9 +539,21 @@ export default function SwingTradesPage() {
                   type="number"
                   step="any"
                   value={actualEntryPrice}
-                  onChange={(e) => setActualEntryPrice(Number(e.target.value))}
+                  onChange={(e) => handlePriceChange(Number(e.target.value))}
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
                   required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-neutral-450 block">الكمية (عدد الأسهم)</label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="أدخل عدد الأسهم..."
+                  value={execQuantity}
+                  onChange={(e) => handleQuantityChange(e.target.value)}
+                  className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
                 />
               </div>
 
@@ -515,9 +561,10 @@ export default function SwingTradesPage() {
                 <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم المركز (القيمة المستثمرة)</label>
                 <input
                   type="number"
+                  step="any"
                   placeholder={selectedSignal.market === 'EGX' ? 'القيمة بالجنيه المصري' : 'القيمة بالدولار'}
                   value={positionSize}
-                  onChange={(e) => setPositionSize(e.target.value)}
+                  onChange={(e) => handleValueChange(e.target.value)}
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
                   required
                 />

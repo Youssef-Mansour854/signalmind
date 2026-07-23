@@ -65,7 +65,39 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const [isExecModalOpen, setIsExecModalOpen] = useState(false);
   const [actualEntryPrice, setActualEntryPrice] = useState<number>(signal.entryPrice);
   const [positionSize, setPositionSize] = useState<string>('');
+  const [execQuantity, setExecQuantity] = useState<string>('');
   const [riskPercentage, setRiskPercentage] = useState<number>(1);
+
+  const handleValueChange = (val: string) => {
+    setPositionSize(val);
+    const numVal = parseFloat(val);
+    const numPrice = typeof actualEntryPrice === 'number' ? actualEntryPrice : parseFloat(String(actualEntryPrice));
+    if (numVal > 0 && numPrice > 0) {
+      setExecQuantity((numVal / numPrice).toFixed(4));
+    } else {
+      setExecQuantity('');
+    }
+  };
+
+  const handleQuantityChange = (val: string) => {
+    setExecQuantity(val);
+    const numQty = parseFloat(val);
+    const numPrice = typeof actualEntryPrice === 'number' ? actualEntryPrice : parseFloat(String(actualEntryPrice));
+    if (numQty > 0 && numPrice > 0) {
+      setPositionSize((numQty * numPrice).toFixed(2));
+    } else {
+      setPositionSize('');
+    }
+  };
+
+  const handlePriceChange = (priceVal: number) => {
+    setActualEntryPrice(priceVal);
+    const numPrice = priceVal;
+    const numValue = parseFloat(positionSize);
+    if (numPrice > 0 && numValue > 0) {
+      setExecQuantity((numValue / numPrice).toFixed(4));
+    }
+  };
   const [stopLossPrice, setStopLossPrice] = useState<number>(signal.stopLoss);
   const [setupQuality, setSetupQuality] = useState<'A+' | 'B' | 'FOMO' | 'Revenge'>('A+');
   const [userStats, setUserStats] = useState<any>(null);
@@ -215,7 +247,7 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
     try {
       const isFunded = accountMode === 'FUNDED';
       const size = isFunded ? calculatedPositionSize : Number(positionSize);
-      const qty = isFunded ? calculatedQty : (actualEntryPrice > 0 ? size / actualEntryPrice : 0);
+      const qty = isFunded ? calculatedQty : (execQuantity ? Number(execQuantity) : (actualEntryPrice > 0 ? size / actualEntryPrice : 0));
 
       const res = await fetch('/api/portfolio', {
         method: 'POST',
@@ -563,7 +595,7 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                   type="number"
                   step="any"
                   value={actualEntryPrice}
-                  onChange={(e) => setActualEntryPrice(Number(e.target.value))}
+                  onChange={(e) => handlePriceChange(Number(e.target.value))}
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
                   required
                 />
@@ -636,17 +668,32 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                   </div>
                 </>
               ) : (
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم المركز (القيمة المستثمرة)</label>
-                  <input
-                    type="number"
-                    placeholder={signal.market === 'EGX' ? 'القيمة بالجنيه المصري' : 'القيمة بالدولار'}
-                    value={positionSize}
-                    onChange={(e) => setPositionSize(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
-                    required
-                  />
-                </div>
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-neutral-450 block">الكمية (عدد الأسهم)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="أدخل عدد الأسهم..."
+                      value={execQuantity}
+                      onChange={(e) => handleQuantityChange(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم المركز (القيمة المستثمرة)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder={signal.market === 'EGX' ? 'القيمة بالجنيه المصري' : 'القيمة بالدولار'}
+                      value={positionSize}
+                      onChange={(e) => handleValueChange(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                      required
+                    />
+                  </div>
+                </>
               )}
 
               <div className="flex gap-3 pt-2">
