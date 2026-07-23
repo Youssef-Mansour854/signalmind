@@ -70,6 +70,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Shared Live Price State Dictionary
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+
+  const onLivePriceUpdate = (symbol: string, price: number) => {
+    if (!symbol || typeof price !== 'number' || price <= 0) return;
+    setLivePrices((prev) => (prev[symbol] === price ? prev : { ...prev, [symbol]: price }));
+  };
+
   // Dual Portfolio & Timeframe State
   const [portfolioType, setPortfolioType] = useState<'USER' | 'SYSTEM'>('USER');
   const [timeframe, setTimeframe] = useState<'1d' | '1w' | '3m' | '6m' | '1y' | 'all'>('all');
@@ -161,8 +169,15 @@ export default function DashboardPage() {
     try {
       const res = await fetch(`/api/signals?status=Active&limit=100&market=${marketFilter}`);
       const json = await res.json();
-      if (json.success) {
+      if (json.success && Array.isArray(json.data)) {
         setSignals(json.data);
+        const map: Record<string, number> = {};
+        json.data.forEach((s: Signal) => {
+          if (s.symbol && typeof s.currentPrice === 'number' && s.currentPrice > 0) {
+            map[s.symbol] = s.currentPrice;
+          }
+        });
+        setLivePrices((prev) => ({ ...prev, ...map }));
       } else {
         setError(json.error || 'فشل في جلب البيانات');
       }
@@ -199,6 +214,17 @@ export default function DashboardPage() {
       console.log("🔥 NUCLEAR TEST - API PAYLOAD:", data);
       const statsPayload = data.data || data;
       setPortfolioStats(statsPayload);
+
+      if (statsPayload && Array.isArray(statsPayload.positions)) {
+        const statsMap: Record<string, number> = {};
+        statsPayload.positions.forEach((pos: any) => {
+          const price = pos.livePrice || pos.currentPrice;
+          if (pos.symbol && typeof price === 'number' && price > 0) {
+            statsMap[pos.symbol] = price;
+          }
+        });
+        setLivePrices((prev) => ({ ...prev, ...statsMap }));
+      }
     } catch (err) {
       console.error('Failed to fetch portfolio stats:', err);
     } finally {
@@ -410,7 +436,8 @@ export default function DashboardPage() {
       positions.forEach((pos) => {
         const qty = pos.quantity || 0;
         const entry = pos.actualEntryPrice || 0;
-        const currentLive = pos.livePrice || pos.currentPrice || entry;
+        // FORCE use of the shared livePrices dictionary, fallback to pos.livePrice -> pos.currentPrice -> entry
+        const currentLive = livePrices[pos.symbol] || pos.livePrice || pos.currentPrice || entry;
 
         calcInvested += (currentLive * qty);
         calcFloatingPnL += ((currentLive - entry) * qty);
@@ -431,7 +458,7 @@ export default function DashboardPage() {
       liveTotalEquity: portfolioStats.totalPortfolioValue || 0,
       liveTotalPnL: portfolioStats.totalPnL || 0,
     };
-  }, [portfolioStats, accurateCash]);
+  }, [portfolioStats, accurateCash, livePrices]);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
