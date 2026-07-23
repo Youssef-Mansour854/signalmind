@@ -49,6 +49,19 @@ interface PortfolioStats {
   currentTotalDrawdown: number;
   dailyStartEquity: number;
   peakEquity: number;
+  positions?: Array<{
+    _id: string;
+    symbol: string;
+    market: string;
+    actualEntryPrice: number;
+    positionSize: number;
+    quantity: number;
+    currentPrice?: number;
+    livePrice?: number;
+    itemValue?: number;
+    itemPnL?: number;
+    itemPnLPct?: number;
+  }>;
 }
 
 export default function DashboardPage() {
@@ -377,7 +390,48 @@ export default function DashboardPage() {
     );
   };
 
-  console.log("Frontend UI Received Stats:", portfolioStats);
+  // Client-Side Recalculation for Live Accuracy
+  const accurateCash = portfolioStats?.availableCash || 0;
+
+  const { liveInvestedCapital, liveTotalEquity, liveTotalPnL } = React.useMemo(() => {
+    if (!portfolioStats) {
+      return {
+        liveInvestedCapital: 0,
+        liveTotalEquity: 0,
+        liveTotalPnL: 0,
+      };
+    }
+
+    const positions = portfolioStats.positions || [];
+    if (positions.length > 0) {
+      let calcInvested = 0;
+      let calcFloatingPnL = 0;
+
+      positions.forEach((pos) => {
+        const qty = pos.quantity || 0;
+        const entry = pos.actualEntryPrice || 0;
+        const currentLive = pos.livePrice || pos.currentPrice || entry;
+
+        calcInvested += (currentLive * qty);
+        calcFloatingPnL += ((currentLive - entry) * qty);
+      });
+
+      const realized = portfolioStats.realizedPnL || 0;
+      const totalPnLVal = calcFloatingPnL + realized;
+
+      return {
+        liveInvestedCapital: calcInvested,
+        liveTotalEquity: accurateCash + calcInvested,
+        liveTotalPnL: totalPnLVal,
+      };
+    }
+
+    return {
+      liveInvestedCapital: portfolioStats.investedCapital || 0,
+      liveTotalEquity: portfolioStats.totalPortfolioValue || 0,
+      liveTotalPnL: portfolioStats.totalPnL || 0,
+    };
+  }, [portfolioStats, accurateCash]);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 flex-1 flex flex-col justify-start max-w-7xl mx-auto w-full" dir="rtl">
@@ -640,7 +694,7 @@ export default function DashboardPage() {
               <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
             ) : (
               <span className={`text-xl sm:text-2xl font-black block font-mono ${accentTextClass}`}>
-                {formatCurrency(portfolioStats?.totalPortfolioValue || 0)}
+                {formatCurrency(liveTotalEquity)}
               </span>
             )}
             <span className="text-[9px] text-neutral-500 font-mono">
@@ -671,7 +725,7 @@ export default function DashboardPage() {
               <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
             ) : (
               <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-                {formatCurrency(portfolioStats?.availableCash || 0)}
+                {formatCurrency(accurateCash)}
               </span>
             )}
             <span className="text-[9px] text-neutral-500 font-mono">
@@ -689,7 +743,7 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-                  {formatCurrency(portfolioStats?.investedCapital || 0)}
+                  {formatCurrency(liveInvestedCapital)}
                 </span>
               )}
               <span className="text-[9px] text-neutral-500 font-mono">
@@ -724,11 +778,11 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <div className="flex items-baseline gap-2">
-                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalPnL || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
-                    {(portfolioStats?.totalPnL || 0) >= 0 ? '+' : ''}
-                    {formatCurrency(portfolioStats?.totalPnL || 0)}
+                  <span className={`text-xl sm:text-2xl font-mono ${liveTotalPnL >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                    {liveTotalPnL >= 0 ? '+' : ''}
+                    {formatCurrency(liveTotalPnL)}
                   </span>
-                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalPnL || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                  <span className={`text-xs font-mono font-bold dir-ltr ${liveTotalPnL >= 0 ? 'text-white' : 'text-neutral-500'}`}>
                     ({(portfolioStats?.totalProfitLossPercentage || 0) >= 0 ? '+' : ''}
                     {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
                   </span>
@@ -750,9 +804,6 @@ export default function DashboardPage() {
                   {formatCurrency(portfolioStats?.peakEquity || 0)}
                 </span>
               )}
-              <span className="text-[9px] text-neutral-500 font-mono">
-                (أعلى قمة لحساب التراجع التراكمي)
-              </span>
             </div>
           )}
         </div>
