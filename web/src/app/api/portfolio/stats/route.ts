@@ -224,11 +224,12 @@ export async function GET(request: Request) {
       peakEquity: Number(peakEquity.toFixed(2))
     };
 
-    console.log("[Portfolio Stats API Output]", payload);
+    console.log("🔥 NUCLEAR TEST - API OUTPUT:", payload);
 
     return NextResponse.json(
       {
         success: true,
+        ...payload,
         data: payload,
       },
       {

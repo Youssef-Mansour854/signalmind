@@ -179,11 +179,10 @@ export default function DashboardPage() {
         console.error("API returned non-JSON response");
         return;
       }
-      const json = await res.json();
-      console.log("[Frontend UI Received Stats]:", json?.data);
-      if (json.success && json.data) {
-        setPortfolioStats(json.data);
-      }
+      const data = await res.json();
+      console.log("🔥 NUCLEAR TEST - API PAYLOAD:", data);
+      const statsPayload = data.data || data;
+      setPortfolioStats(statsPayload);
     } catch (err) {
       console.error('Failed to fetch portfolio stats:', err);
     } finally {
@@ -687,7 +686,7 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <span className="text-xl sm:text-2xl font-black text-white block font-mono">
-                  {formatCurrency(portfolioStats?.investedCapital ?? portfolioStats?.totalInvestedCost ?? 0)}
+                  {formatCurrency(portfolioStats?.investedCapital || 0)}
                 </span>
               )}
               <span className="text-[9px] text-neutral-500 font-mono">
@@ -722,12 +721,12 @@ export default function DashboardPage() {
                 <div className="h-8 w-32 bg-neutral-900 animate-pulse rounded my-1" />
               ) : (
                 <div className="flex items-baseline gap-2">
-                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
-                    {(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? '+' : ''}
-                    {formatCurrency(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0)}
+                  <span className={`text-xl sm:text-2xl font-mono ${(portfolioStats?.totalPnL || 0) >= 0 ? 'text-white font-black' : 'text-neutral-500 font-normal'}`}>
+                    {(portfolioStats?.totalPnL || 0) >= 0 ? '+' : ''}
+                    {formatCurrency(portfolioStats?.totalPnL || 0)}
                   </span>
-                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                    ({(portfolioStats?.totalPnL ?? portfolioStats?.totalProfitLoss ?? 0) >= 0 ? '+' : ''}
+                  <span className={`text-xs font-mono font-bold dir-ltr ${(portfolioStats?.totalPnL || 0) >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                    ({(portfolioStats?.totalProfitLossPercentage || 0) >= 0 ? '+' : ''}
                     {portfolioStats?.totalProfitLossPercentage?.toFixed(2) || '0.00'}%)
                   </span>
                 </div>
