@@ -86,6 +86,47 @@ class TelegramSender:
 ---"""
         return self.send_message(text)
 
+    def send_top_signals_aggregated(self, top_signals: list) -> bool:
+        """Aggregates Top 5 signals into ONE single formatted Telegram message per run."""
+        if not self.has_credentials():
+            print("[INFO] Telegram credentials not found. Skipping aggregated Telegram alert.")
+            return True
+
+        if not top_signals:
+            return True
+
+        cairo_time = datetime.datetime.now(cairo_tz)
+        time_str = cairo_time.strftime("%Y-%m-%d %H:%M")
+
+        lines = [
+            "🏆 <b>SignalMind Top 5 Quantitative Opportunities</b> 🚀",
+            f"⏰ <i>{time_str}</i> (Cairo Time)",
+            "----------------------------------------"
+        ]
+
+        for idx, sig in enumerate(top_signals, 1):
+            symbol = sig.get('symbol', 'UNKNOWN')
+            market = sig.get('market', 'US')
+            signal_type = sig.get('signalType', 'BUY')
+            entry = sig.get('entryPrice', 0)
+            tp = sig.get('takeProfit', 0)
+            sl = sig.get('stopLoss', 0)
+            score = sig.get('scoreMetrics', {}).get('totalScore', 0)
+            timeframe = sig.get('timeframe', 'يومي')
+            curr = "ج.م" if market == "EGX" or str(symbol).endswith(".CA") else "$"
+
+            lines.append(
+                f"<b>#{idx} {symbol}</b> ({market}) - 🟢 <b>{signal_type}</b>\n"
+                f"📈 <b>Score:</b> {score}/100 | ⏱ <b>Timeframe:</b> {timeframe}\n"
+                f"💰 <b>Entry:</b> {curr}{entry} | 🎯 <b>TP:</b> {curr}{tp} | 🛡️ <b>SL:</b> {curr}{sl}\n"
+            )
+
+        lines.append("----------------------------------------")
+        lines.append(self.config.DISCLAIMER_TEXT)
+
+        full_message = "\n".join(lines)
+        return self.send_message(full_message)
+
     def send_error_alert(self, total: int, failed: int) -> bool:
         """Sends an alert if failure threshold is reached."""
         if not self.has_credentials():

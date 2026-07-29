@@ -116,18 +116,54 @@ export async function POST(request: Request) {
 
     const resultsSummary: string[] = [];
     let successCount = 0;
+    const generatedSignals: any[] = [];
 
-    for (const item of watchlist) {
-      const { symbol, market } = item;
-      try {
-        // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
-        const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
-        const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
+    // Helper chunker for watchlist
+    const CHUNK_SIZE = 5;
+    const CHUNK_DELAY_MS = 2000;
+    const chunkArray = <T>(arr: T[], size: number): T[][] =>
+      arr.length ? [arr.slice(0, size), ...chunkArray(arr.slice(size), size)] : [];
 
-        // 3. Setup prompt based on routine
-        let prompt = '';
-        if (isMacro) {
-          prompt = `أنت خبير استراتيجيات الاستثمار الكلي والتحليل الفني الهيكلي للمدى البعيد.
+    const watchlistChunks = chunkArray(watchlist, CHUNK_SIZE);
+
+    for (let cIdx = 0; cIdx < watchlistChunks.length; cIdx++) {
+      const chunk = watchlistChunks[cIdx];
+      console.log(`[SCANNER CHUNK] Processing batch ${cIdx + 1}/${watchlistChunks.length} (${chunk.length} items)...`);
+
+      for (const item of chunk) {
+        const { symbol, market } = item;
+        try {
+          // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
+          const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
+          const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
+
+          // --- STRICT FILTER 1: Minimum Average Daily Volume (1,000,000) ---
+          const MIN_VOLUME = 1000000;
+          const volumeAvg = (marketData as any).volumeAvg || (marketData as any).volume || 0;
+          if (volumeAvg > 0 && volumeAvg < MIN_VOLUME) {
+            console.log(`[Noise Filter] Skipped ${symbol}: Average volume (${volumeAvg}) < ${MIN_VOLUME}`);
+            resultsSummary.push(`${symbol}: تم التخطي بسبب ضعف السيولة اليومية (< 1,000,000)`);
+            continue;
+          }
+
+          // --- STRICT FILTER 2: RSI Safe Range (40 - 70) ---
+          if (latestRSI < 40 || latestRSI > 70) {
+            console.log(`[RSI Filter] Skipped ${symbol}: RSI (${latestRSI.toFixed(1)}) outside 40-70 safe range`);
+            resultsSummary.push(`${symbol}: تم التخطي لخروج مؤشر RSI عن النطاق الآمن (40-70)`);
+            continue;
+          }
+
+          // --- STRICT FILTER 3: Trend Confirmation (Price >= EMA50) ---
+          if (latestEMA50 > 0 && latestPrice < latestEMA50) {
+            console.log(`[Trend Filter] Skipped ${symbol}: Price (${latestPrice}) below EMA50 (${latestEMA50})`);
+            resultsSummary.push(`${symbol}: تم التخطي بسبب معاكسة الاتجاه (السعر أقل من EMA50)`);
+            continue;
+          }
+
+          // 3. Setup prompt based on routine
+          let prompt = '';
+          if (isMacro) {
+            prompt = `أنت خبير استراتيجيات الاستثمار الكلي والتحليل الفني الهيكلي للمدى البعيد.
 قم بتحليل الاتجاه الهيكلي لسهم/صندوق ${symbol} (سوق: ${market}) بناءً على البيانات الفنية التاريخية (لمدة سنة كاملة):
 - السعر الحالي: ${latestPrice.toFixed(2)}
 - مؤشر RSI (14): ${latestRSI.toFixed(2)}
@@ -154,8 +190,8 @@ export async function POST(request: Request) {
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني هيكلي استثماري دقيق باللغة العربية يشرح سبب اتخاذ هذا القرار والتوجه الكلي للرمز بناء على EMA 50/200 والمؤشرات المذكورة."
 }`;
-        } else {
-          prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
+          } else {
+            prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
 قم بتحليل البيانات الفنية الحالية لسهم ${symbol} (سوق: ${market}) واكتب توصية تداول دقيقة باللغة العربية بناءً على المعطيات التالية:
 - السعر الحالي: ${latestPrice.toFixed(2)}
 - مؤشر القوة النسبية RSI (14): ${latestRSI.toFixed(2)}
@@ -183,131 +219,142 @@ export async function POST(request: Request) {
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني مختصر ومقنع باللغة العربية يشرح سبب اتخاذ هذا القرار الفني بالاعتماد على المؤشرات المذكورة (RSI, MACD) ومستويات الدعم والمقاومة، وسبب اختيار هذا الإطار الزمني بالذات."
 }`;
-        }
+          }
 
-        // 4. Query AI using rotated keys
-        let content = '';
-        let lastError: any = null;
+          // 4. Query AI using rotated keys
+          let content = '';
+          let lastError: any = null;
 
-        for (let i = 0; i < apiKeys.length; i++) {
-          const currentKey = apiKeys[i];
-          try {
-            const groq = new Groq({ apiKey: currentKey });
-            const chatCompletion = await groq.chat.completions.create({
-              messages: [
-                { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
-                { role: 'user', content: prompt },
-              ],
-              model: 'llama-3.3-70b-versatile',
-              response_format: { type: 'json_object' },
-            });
+          for (let i = 0; i < apiKeys.length; i++) {
+            const currentKey = apiKeys[i];
+            try {
+              const groq = new Groq({ apiKey: currentKey });
+              const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                  { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
+                  { role: 'user', content: prompt },
+                ],
+                model: 'llama-3.3-70b-versatile',
+                response_format: { type: 'json_object' },
+              });
 
-            const resContent = chatCompletion.choices[0]?.message?.content;
-            if (resContent) {
-              content = resContent;
-              break;
+              const resContent = chatCompletion.choices[0]?.message?.content;
+              if (resContent) {
+                content = resContent;
+                break;
+              }
+            } catch (err: any) {
+              console.warn(`[WARNING] Groq key at index ${i} failed for bulk scan of ${symbol}: ${err.message}`);
+              lastError = err;
             }
-          } catch (err: any) {
-            console.warn(`[WARNING] Groq key at index ${i} failed for bulk scan of ${symbol}: ${err.message}`);
-            lastError = err;
+          }
+
+          if (!content) {
+            resultsSummary.push(`${symbol}: فشل الاتصال بالذكاء الاصطناعي`);
+            continue;
+          }
+
+          const parsed = JSON.parse(content);
+
+          // Normalize timeframe
+          let finalTimeframe = parsed.timeframe || (isMacro ? 'أسبوعي' : 'يومي');
+          if (finalTimeframe === 'DAY' || finalTimeframe === 'day') {
+            finalTimeframe = isMacro ? 'أسبوعي' : 'يومي';
+          }
+          if (finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
+          if (finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
+          if (finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
+
+          const entry = Number(parsed.entryPrice) || latestPrice;
+          const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
+          const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
+          const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
+
+          const signalType = parsed.signalType || 'BUY';
+          const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
+          const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+          const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
+
+          // Deduplication: Before inserting a new signal for a specific symbol and timeframe,
+          // find any existing 'ACTIVE'/'Active'/'Pending' signals for that same symbol/timeframe and update status to 'EXPIRED'
+          await Signal.updateMany(
+            { symbol, timeframe: finalTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
+            { $set: { status: 'EXPIRED' } }
+          );
+
+          const createdAt = new Date();
+          const expiresAt = getExpirationDate(finalTimeframe, createdAt);
+
+          // 5. Save Signal to MongoDB (Insert new document)
+          const newSignal = new Signal({
+            symbol,
+            market,
+            signalType,
+            entryPrice: entry,
+            actualEntryPrice,
+            stopLoss: sl,
+            takeProfit: tp,
+            currentPrice: latestPrice,
+            status: initialStatus,
+            expiresAt,
+            aiConfidence: parsed.aiConfidence || 'Medium',
+            aiRisk: parsed.aiRisk || 'Medium',
+            timeframe: finalTimeframe,
+            signalStrength: parsed.signalStrength || 'متوسطة',
+            explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
+            indicators: {
+              close: latestPrice,
+              rsi: latestRSI,
+              macdLine: latestMACD.MACD || 0,
+              macdSignal: latestMACD.signal || 0,
+            },
+            scoreMetrics: {
+              riskRewardRatio: Number(rrr.toFixed(2)),
+              confluenceScore: 75,
+              aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
+              totalScore: 75,
+              rank: 999,
+            },
+            createdAt,
+            updatedAt: createdAt,
+          });
+
+          await newSignal.save();
+          console.log(`[AI SUCCESS] Generated signal for ${symbol} in timeframe: ${finalTimeframe}`);
+
+          generatedSignals.push(newSignal);
+          resultsSummary.push(`${symbol}: تم التحديث بنجاح كـ (${finalTimeframe})`);
+          successCount++;
+
+          await delay(1000);
+
+        } catch (err: any) {
+          if (err instanceof StaleDataError) {
+            console.warn(`[Guard REJECT] Skipped ${symbol} due to stale data: ${err.message}`);
+            resultsSummary.push(`${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`);
+          } else {
+            console.error(`Error scanning ${symbol}:`, err);
+            resultsSummary.push(`${symbol}: خطأ (${err.message})`);
           }
         }
+      }
 
-        if (!content) {
-          resultsSummary.push(`${symbol}: فشل الاتصال بالذكاء الاصطناعي`);
-          continue;
-        }
-
-        const parsed = JSON.parse(content);
-
-        // Normalize timeframe
-        let finalTimeframe = parsed.timeframe || (isMacro ? 'أسبوعي' : 'يومي');
-        if (finalTimeframe === 'DAY' || finalTimeframe === 'day') {
-          finalTimeframe = isMacro ? 'أسبوعي' : 'يومي';
-        }
-        if (finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
-        if (finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
-        if (finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
-
-        const entry = Number(parsed.entryPrice) || latestPrice;
-        const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
-        const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
-        const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
-
-        const signalType = parsed.signalType || 'BUY';
-        const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
-        const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
-        const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
-
-        // Deduplication: Before inserting a new signal for a specific symbol and timeframe,
-        // find any existing 'ACTIVE'/'Active'/'Pending' signals for that same symbol/timeframe and update status to 'EXPIRED'
-        await Signal.updateMany(
-          { symbol, timeframe: finalTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
-          { $set: { status: 'EXPIRED' } }
-        );
-
-        const createdAt = new Date();
-        const expiresAt = getExpirationDate(finalTimeframe, createdAt);
-
-        // 5. Save Signal to MongoDB (Insert new document)
-        const newSignal = new Signal({
-          symbol,
-          market,
-          signalType,
-          entryPrice: entry,
-          actualEntryPrice,
-          stopLoss: sl,
-          takeProfit: tp,
-          currentPrice: latestPrice,
-          status: initialStatus,
-          expiresAt,
-          aiConfidence: parsed.aiConfidence || 'Medium',
-          aiRisk: parsed.aiRisk || 'Medium',
-          timeframe: finalTimeframe,
-          signalStrength: parsed.signalStrength || 'متوسطة',
-          explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
-          indicators: {
-            close: latestPrice,
-            rsi: latestRSI,
-            macdLine: latestMACD.MACD || 0,
-            macdSignal: latestMACD.signal || 0,
-          },
-          scoreMetrics: {
-            riskRewardRatio: Number(rrr.toFixed(2)),
-            confluenceScore: 75,
-            aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
-            totalScore: 75,
-            rank: 999,
-          },
-          createdAt,
-          updatedAt: createdAt,
-        });
-
-        await newSignal.save();
-        console.log(`[AI SUCCESS] Generated signal for ${symbol} in timeframe: ${finalTimeframe}`);
-
-        resultsSummary.push(`${symbol}: تم التحديث بنجاح كـ (${finalTimeframe})`);
-        successCount++;
-
-        // Small delay to prevent hitting API limits
-        await delay(1000);
-
-      } catch (err: any) {
-        if (err instanceof StaleDataError) {
-          console.warn(`[Guard REJECT] Skipped ${symbol} due to stale data: ${err.message}`);
-          resultsSummary.push(`${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`);
-        } else {
-          console.error(`Error scanning ${symbol}:`, err);
-          resultsSummary.push(`${symbol}: خطأ (${err.message})`);
-        }
+      if (cIdx < watchlistChunks.length - 1) {
+        console.log(`[RATE LIMIT GUARD] Pausing ${CHUNK_DELAY_MS}ms between chunks...`);
+        await delay(CHUNK_DELAY_MS);
       }
     }
 
+    // Cap output to Top 5 signals sorted by total score
+    generatedSignals.sort((a, b) => (b.scoreMetrics?.totalScore || 0) - (a.scoreMetrics?.totalScore || 0));
+    const top5Signals = generatedSignals.slice(0, 5);
+
     return NextResponse.json({
       success: true,
-      message: `اكتمل مسح ${isMacro ? 'الفرص الاستثمارية الكبرى (MACRO SCAN)' : 'رادار الافتتاح (OPENING BELL)'} بنجاح. تم توليد وتحديث ${successCount} إشارات من أصل ${watchlist.length}.`,
+      message: `اكتمل مسح ${isMacro ? 'الفرص الاستثمارية الكبرى (MACRO SCAN)' : 'رادار الافتتاح (OPENING BELL)'} بنجاح. تم اختيار أفضـل ${top5Signals.length} إشارات بعد تطبيق الفلاتر الصارمة.`,
       routine,
-      summary: resultsSummary
+      summary: resultsSummary,
+      topSignals: top5Signals,
     });
 
   } catch (error: any) {
