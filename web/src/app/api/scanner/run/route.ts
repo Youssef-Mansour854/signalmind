@@ -91,6 +91,19 @@ export async function POST(request: Request) {
 
     await dbConnect();
 
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // --- GLOBAL DAILY CAP CHECK (Maximum 5 signals per day across all runs) ---
+    const todaySignalsCount = await Signal.countDocuments({ createdAt: { $gte: startOfToday } });
+    if (todaySignalsCount >= 5) {
+      return NextResponse.json({
+        success: true,
+        limitReached: true,
+        message: "تم الوصول إلى الحد الأقصى اليومي (5 إشارات). لن يتم إجراء مسح جديد اليوم."
+      });
+    }
+
     const apiKeysString = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || '';
     const apiKeys = apiKeysString.split(',').map((key) => key.trim()).filter(Boolean);
 
@@ -98,17 +111,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'GROQ_API_KEYS غير معرّف في خادم الويب.' }, { status: 500 });
     }
 
+    const searchParams = new URL(request.url).searchParams;
+    const urlTf = searchParams.get('tf');
+
     let routine: 'OPENING_BELL' | 'MACRO_SCAN' = 'OPENING_BELL';
+    let reqTf = urlTf || null;
     try {
       const body = await request.clone().json();
       if (body?.routine === 'MACRO_SCAN' || body?.routine === 'OPENING_BELL') {
         routine = body.routine;
       }
+      if (body?.tf) {
+        reqTf = body.tf;
+      }
     } catch {
-      const urlRoutine = new URL(request.url).searchParams.get('routine');
+      const urlRoutine = searchParams.get('routine');
       if (urlRoutine === 'MACRO_SCAN') {
         routine = 'MACRO_SCAN';
       }
+    }
+
+    if (!reqTf) {
+      reqTf = routine === 'MACRO_SCAN' ? 'SWING' : 'DAY_TRADE';
     }
 
     const watchlist = routine === 'MACRO_SCAN' ? MACRO_WATCHLIST : OPENING_WATCHLIST;
@@ -272,14 +296,18 @@ export async function POST(request: Request) {
 
           const parsed = JSON.parse(content);
 
-          // Normalize timeframe
-          let finalTimeframe = parsed.timeframe || (isMacro ? 'أسبوعي' : 'يومي');
-          if (finalTimeframe === 'DAY' || finalTimeframe === 'day') {
-            finalTimeframe = isMacro ? 'أسبوعي' : 'يومي';
+          // Normalize timeframe using reqTf if necessary
+          let finalTimeframe = parsed.timeframe;
+          if (!finalTimeframe || finalTimeframe === 'DAY' || finalTimeframe === 'day') {
+            if (reqTf === 'SWING') finalTimeframe = 'أسبوعي';
+            else if (reqTf === 'MONTHLY') finalTimeframe = 'شهري';
+            else if (reqTf === 'YEARLY') finalTimeframe = 'استثمار سنوي';
+            else finalTimeframe = 'يومي';
           }
-          if (finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
-          if (finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
-          if (finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
+          if (finalTimeframe === 'DAY_TRADE' || finalTimeframe === 'DAY' || finalTimeframe === 'day') finalTimeframe = 'يومي';
+          if (finalTimeframe === 'SWING' || finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
+          if (finalTimeframe === 'MONTHLY' || finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
+          if (finalTimeframe === 'YEARLY' || finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
 
           const entry = Number(parsed.entryPrice) || latestPrice;
           const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
@@ -353,11 +381,14 @@ export async function POST(request: Request) {
       }
     }
 
-    // --- STRICT STEP 2, 3 & 4: Sort by Strength, Hard Cap (Top 5 Only) & Database Insert ---
+    // --- STRICT STEP 2, 3 & 4: Sort by Strength, Global Hard Cap & Database Insert ---
     generatedSignals.sort((a, b) => (b.scoreMetrics?.totalScore || 0) - (a.scoreMetrics?.totalScore || 0));
-    const top5Signals = generatedSignals.slice(0, 5);
 
-    for (const signalToSave of top5Signals) {
+    // Calculate maximum signals allowed to insert today without exceeding global daily limit of 5
+    const remainingCap = Math.max(0, 5 - todaySignalsCount);
+    const topSignalsToInsert = generatedSignals.slice(0, remainingCap);
+
+    for (const signalToSave of topSignalsToInsert) {
       await Signal.updateMany(
         { symbol: signalToSave.symbol, timeframe: signalToSave.timeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
         { $set: { status: 'EXPIRED' } }
@@ -366,12 +397,15 @@ export async function POST(request: Request) {
       console.log(`[DATABASE INSERT] Saved capped signal for ${signalToSave.symbol}`);
     }
 
+    const scanTypeStr = isMacro ? 'الفرص الكبرى' : 'رادار الافتتاح';
+    const responseMsg = `اكتمل مسح ${scanTypeStr} بنجاح. تم اختيـار ${topSignalsToInsert.length} إشارات جديدة.`;
+
     return NextResponse.json({
       success: true,
-      message: `اكتمل مسح ${isMacro ? 'الفرص الاستثمارية الكبرى (MACRO SCAN)' : 'رادار الافتتاح (OPENING BELL)'} بنجاح. تم اختيار أفضـل ${top5Signals.length} إشارات بعد تطبيق الفلاتر الصارمة.`,
+      message: responseMsg,
       routine,
       summary: resultsSummary,
-      topSignals: top5Signals,
+      topSignals: topSignalsToInsert,
     });
 
   } catch (error: any) {

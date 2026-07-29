@@ -113,14 +113,15 @@ export default function DashboardPage() {
     setIsScanning(true);
     setActiveRoutine(routine);
     setScannerResult(null);
+    const tfParam = routine === 'OPENING_BELL' ? 'DAY_TRADE' : 'SWING';
     try {
-      const res = await fetch('/api/scanner/run?manual=true', {
+      const res = await fetch(`/api/scanner/run?manual=true&tf=${tfParam}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-manual-trigger': 'true'
         },
-        body: JSON.stringify({ routine })
+        body: JSON.stringify({ routine, tf: tfParam })
       });
       const json = await res.json();
       if (json.success) {
@@ -438,8 +439,31 @@ export default function DashboardPage() {
     );
   };
 
+  const isTimeframeMatch = (signalTf: string | undefined, widgetTf: string): boolean => {
+    if (!signalTf) return false;
+    const stf = signalTf.toUpperCase();
+    const wtf = widgetTf.toUpperCase();
+
+    if (wtf === 'أسبوعي' || wtf === 'SWING' || wtf === 'WEEK') {
+      return stf === 'أسبوعي' || stf === 'SWING' || stf === 'WEEK';
+    }
+    if (wtf === 'شهري' || wtf === 'MONTHLY' || wtf === 'MONTH') {
+      return stf === 'شهري' || stf === 'MONTHLY' || stf === 'MONTH';
+    }
+    if (wtf === 'استثمار سنوي' || wtf === 'YEARLY' || wtf === 'YEAR') {
+      return stf === 'استثمار سنوي' || stf === 'YEARLY' || stf === 'YEAR';
+    }
+    if (wtf === 'يومي' || wtf === 'DAY_TRADE' || wtf === 'DAY') {
+      return stf === 'يومي' || stf === 'DAY_TRADE' || stf === 'DAY';
+    }
+
+    return signalTf === widgetTf;
+  };
+
   const getWidgetSignals = (tf: string) => {
-    if (tf === 'يومي') {
+    const isDaily = tf === 'يومي' || tf === 'DAY_TRADE';
+
+    if (isDaily) {
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0); // 12:00 AM today in local timezone
 
@@ -449,7 +473,7 @@ export default function DashboardPage() {
 
         // Include if it was created today OR if it's an active intraday trade
         const isIntradayActive =
-          signal.timeframe === 'يومي' &&
+          isTimeframeMatch(signal.timeframe, 'يومي') &&
           (signal.status === 'ACTIVE' || signal.status === 'Active' || signal.status === 'Pending');
 
         return isCreatedToday || isIntradayActive;
@@ -460,10 +484,11 @@ export default function DashboardPage() {
         .slice(0, 3);
     }
 
+    // Weekly (SWING), Monthly (MONTHLY), Yearly (YEARLY) Widgets: Show active/pending signals regardless of createdAt
     return signals
       .filter(
         (s) =>
-          s.timeframe === tf &&
+          isTimeframeMatch(s.timeframe, tf) &&
           (s.status === 'ACTIVE' || s.status === 'Active' || s.status === 'Pending')
       )
       .sort((a, b) => {
