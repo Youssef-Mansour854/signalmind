@@ -3,6 +3,9 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import Portfolio from '@/models/Portfolio';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // GET /api/signals - Retrieve signals
 export async function GET(request: Request) {
   try {

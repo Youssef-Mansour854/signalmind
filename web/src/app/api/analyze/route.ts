@@ -8,6 +8,9 @@ import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 import { checkEntryTrigger, evaluateExecutionTrigger } from '@/lib/executionEngine';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
   if (timeframe === 'يومي' || timeframe === 'DAY') {

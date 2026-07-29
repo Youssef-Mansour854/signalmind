@@ -169,7 +169,15 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/signals?status=all&limit=100&market=${marketFilter}`);
+      const timestamp = Date.now();
+      const res = await fetch(`/api/signals?status=all&limit=100&market=${marketFilter}&t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setSignals(json.data);
