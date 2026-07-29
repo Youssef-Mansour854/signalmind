@@ -447,104 +447,68 @@ export default function DashboardPage() {
     );
   };
 
-  const getWidgetSignals = (tf: string) => {
-    const tfNormalized = (tf || '').toUpperCase();
+  // Helper filters for explicit widget data isolation
+  const activeStatusFilter = (status?: string) =>
+    !!status && (status.toLowerCase() === 'active' || status.toLowerCase() === 'pending');
 
-    // 1. Today's Picks Widget: ONLY signals created in last 24h (any status/timeframe) OR active Day Trades
-    if (tfNormalized === 'يومي' || tfNormalized === 'DAY_TRADE' || tfNormalized === 'DAY') {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-      const todaysPicks = signals.filter((s) => {
-        const isRecent = new Date(s.createdAt) >= twentyFourHoursAgo;
-        const sTfUpper = (s.timeframe || '').toUpperCase();
-        const sStatusLower = (s.status || '').toLowerCase();
-        const isIntradayActive =
-          (sTfUpper === 'DAY_TRADE' || sTfUpper === 'DAY' || s.timeframe === 'يومي') &&
-          (sStatusLower === 'active' || sStatusLower === 'pending');
-
-        return isRecent || isIntradayActive;
-      });
-
-      return todaysPicks
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 3);
-    }
-
-    // 2. Weekly (Swing) Widget: ONLY Swing timeframe, MUST be active/pending, IGNORE date
-    if (tfNormalized === 'أسبوعي' || tfNormalized === 'SWING' || tfNormalized === 'WEEK') {
-      const weeklyPicks = signals.filter((s) => {
-        const sTfUpper = (s.timeframe || '').toUpperCase();
-        const isSwing = sTfUpper === 'SWING' || sTfUpper === 'WEEK' || s.timeframe === 'أسبوعي';
-        const sStatusLower = (s.status || '').toLowerCase();
-        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
-        return isSwing && isActive;
-      });
-
-      return weeklyPicks
-        .sort((a, b) => {
-          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
-          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
-          return 0;
-        })
-        .slice(0, 3);
-    }
-
-    // 3. Monthly Widget: ONLY Monthly timeframe, MUST be active/pending, IGNORE date
-    if (tfNormalized === 'شهري' || tfNormalized === 'MONTHLY' || tfNormalized === 'MONTH') {
-      const monthlyPicks = signals.filter((s) => {
-        const sTfUpper = (s.timeframe || '').toUpperCase();
-        const isMonthly = sTfUpper === 'MONTHLY' || sTfUpper === 'MONTH' || s.timeframe === 'شهري';
-        const sStatusLower = (s.status || '').toLowerCase();
-        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
-        return isMonthly && isActive;
-      });
-
-      return monthlyPicks
-        .sort((a, b) => {
-          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
-          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
-          return 0;
-        })
-        .slice(0, 3);
-    }
-
-    // 4. Yearly (Annual) Widget: ONLY Yearly timeframe, MUST be active/pending, IGNORE date
-    if (
-      tfNormalized === 'استثمار سنوي' ||
-      tfNormalized === 'YEARLY' ||
-      tfNormalized === 'YEAR'
-    ) {
-      const yearlyPicks = signals.filter((s) => {
-        const sTfUpper = (s.timeframe || '').toUpperCase();
-        const isYearly = sTfUpper === 'YEARLY' || sTfUpper === 'YEAR' || s.timeframe === 'استثمار سنوي';
-        const sStatusLower = (s.status || '').toLowerCase();
-        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
-        return isYearly && isActive;
-      });
-
-      return yearlyPicks
-        .sort((a, b) => {
-          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
-          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
-          return 0;
-        })
-        .slice(0, 3);
-    }
-
-    // Fallback filter
-    return signals
-      .filter((s) => {
-        const sStatusLower = (s.status || '').toLowerCase();
-        return (
-          s.timeframe === tf &&
-          (sStatusLower === 'active' || sStatusLower === 'pending')
-        );
-      })
-      .slice(0, 3);
+  const isDayTrade = (tf?: string) => {
+    if (!tf) return false;
+    const upper = tf.toUpperCase();
+    return upper === 'DAY_TRADE' || upper === 'DAY' || tf === 'يومي';
   };
 
-  const renderWidget = (title: string, timeframeKey: string, viewAllPath: string, badgeIcon: string) => {
-    const widgetSignals = getWidgetSignals(timeframeKey);
+  const isSwingTrade = (tf?: string) => {
+    if (!tf) return false;
+    const upper = tf.toUpperCase();
+    return upper === 'SWING' || upper === 'WEEK' || tf === 'أسبوعي';
+  };
+
+  const isMonthlyTrade = (tf?: string) => {
+    if (!tf) return false;
+    const upper = tf.toUpperCase();
+    return upper === 'MONTHLY' || upper === 'MONTH' || tf === 'شهري';
+  };
+
+  const isYearlyTrade = (tf?: string) => {
+    if (!tf) return false;
+    const upper = tf.toUpperCase();
+    return upper === 'YEARLY' || upper === 'YEAR' || tf === 'استثمار سنوي';
+  };
+
+  // 1. TODAY'S PICKS WIDGET: STRICTLY Active Day Trades
+  const todaysPicksSignals = signals.filter(
+    (s) => isDayTrade(s.timeframe) && activeStatusFilter(s.status)
+  );
+
+  // 2. WEEKLY (SWING) WIDGET: STRICTLY Active Swing Trades
+  const weeklySignals = signals.filter(
+    (s) => isSwingTrade(s.timeframe) && activeStatusFilter(s.status)
+  );
+
+  // 3. MONTHLY WIDGET: STRICTLY Active Monthly Trades
+  const monthlySignals = signals.filter(
+    (s) => isMonthlyTrade(s.timeframe) && activeStatusFilter(s.status)
+  );
+
+  // 4. INVESTMENT WIDGET: STRICTLY Active Yearly Trades
+  const investmentSignals = signals.filter(
+    (s) => isYearlyTrade(s.timeframe) && activeStatusFilter(s.status)
+  );
+
+  const renderWidget = (
+    title: string,
+    widgetSignals: Signal[],
+    viewAllPath: string,
+    badgeIcon: string,
+    headerTag = 'ACTIVE / PENDING'
+  ) => {
+    const displaySignals = [...widgetSignals]
+      .sort((a, b) => {
+        if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
+        if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 3);
 
     return (
       <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg flex flex-col justify-between h-[360px]">
@@ -556,20 +520,20 @@ export default function DashboardPage() {
               <h2 className="text-sm font-black tracking-tight text-white truncate">{title}</h2>
             </div>
             <span className="text-[10px] text-neutral-500 font-mono shrink-0">
-              {timeframeKey === 'يومي' ? "TODAY'S PICKS" : 'ACTIVE / PENDING'}
+              {headerTag}
             </span>
           </div>
 
           {/* Widget List */}
           {loading ? (
             <div className="py-12 text-center text-xs font-mono text-neutral-500">LOADING...</div>
-          ) : widgetSignals.length === 0 ? (
+          ) : displaySignals.length === 0 ? (
             <div className="py-12 text-center text-xs text-neutral-600 font-sans border border-dashed border-neutral-900 rounded">
-              {timeframeKey === 'يومي' ? 'لا توجد فرص منشأة اليوم حتى الآن.' : 'لا توجد إشارات نشطة حالياً.'}
+              لا توجد إشارات نشطة حالياً.
             </div>
           ) : (
             <div className="space-y-3">
-              {widgetSignals.map((signal) => {
+              {displaySignals.map((signal) => {
                 const isStrong = signal.signalStrength === 'قوية';
                 return (
                   <div
@@ -1068,10 +1032,10 @@ export default function DashboardPage() {
 
       {/* Grid of 4 Widgets (2x2 on desktop, 1 col on mobile) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-        {renderWidget('أقوى فرص اليوم', 'يومي', '/day-trades', '⚡')}
-        {renderWidget('أقوى فرص الأسبوع', 'أسبوعي', '/swing-trades', '📅')}
-        {renderWidget('ترشيحات الشهر', 'شهري', '/monthly-picks', '🌙')}
-        {renderWidget('أفضل استثمارات العام', 'استثمار سنوي', '/annual-investments', '🏢')}
+        {renderWidget('أقوى فرص اليوم', todaysPicksSignals, '/day-trades', '⚡', "TODAY'S PICKS")}
+        {renderWidget('أقوى فرص الأسبوع', weeklySignals, '/swing-trades', '📅')}
+        {renderWidget('ترشيحات الشهر', monthlySignals, '/monthly-picks', '🌙')}
+        {renderWidget('أفضل استثمارات العام', investmentSignals, '/annual-investments', '🏢')}
       </div>
 
       {/* Edit Cash Modal */}
