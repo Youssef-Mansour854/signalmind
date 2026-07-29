@@ -522,8 +522,8 @@ export default function HistoryPage() {
                   <thead>
                     <tr className="border-b border-neutral-900 bg-neutral-900/40 text-neutral-300 font-bold font-sans">
                       <th className="p-4">السهم والقوة والمدى</th>
-                      <th className="p-4">
-                        <div className="flex items-center gap-1 justify-start">
+                      <th className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <span>أسعار التنفيذ</span>
                           <span dir="ltr" className="text-[10px] text-neutral-500 font-mono font-normal">(Entry &rarr; Exit)</span>
                         </div>
@@ -562,8 +562,8 @@ export default function HistoryPage() {
                             </div>
                           </td>
 
-                          <td className="p-4">
-                            <div dir="ltr" className="flex items-center gap-1.5 font-mono text-xs md:text-sm">
+                          <td className="p-4 text-center">
+                            <div dir="ltr" className="flex items-center justify-center gap-3 font-mono text-xs md:text-sm">
                               <span className={isStrong ? 'text-neutral-900 font-bold' : 'text-neutral-300'}>
                                 {formatPrice(trade.entryPrice, trade.market, trade.symbol)}
                               </span>
@@ -654,7 +654,7 @@ export default function HistoryPage() {
                           <span className={`block text-[9px] uppercase ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
                             أسعار التنفيذ (Entry &rarr; Exit):
                           </span>
-                          <div dir="ltr" className="flex items-center gap-1 font-mono text-xs">
+                          <div dir="ltr" className="flex items-center gap-2 font-mono text-xs">
                             <span className={isStrong ? 'text-neutral-900' : 'text-neutral-300'}>{formatPrice(trade.entryPrice, trade.market, trade.symbol)}</span>
                             <span className={isStrong ? 'text-neutral-600' : 'text-neutral-500'}>&rarr;</span>
                             <span className={`font-bold ${isStrong ? 'text-black' : 'text-white'}`}>{formatPrice(exitPrice, trade.market, trade.symbol)}</span>
@@ -776,8 +776,8 @@ export default function HistoryPage() {
                   <thead>
                     <tr className="border-b border-neutral-900 bg-neutral-900/40 text-neutral-300 font-bold font-sans">
                       <th className="p-4">السهم والحجم (Quantity)</th>
-                      <th className="p-4">
-                        <div className="flex items-center gap-1 justify-start">
+                      <th className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <span>أسعار التنفيذ</span>
                           <span dir="ltr" className="text-[10px] text-neutral-500 font-mono font-normal">(Entry &rarr; Exit)</span>
                         </div>
@@ -822,8 +822,8 @@ export default function HistoryPage() {
                             </div>
                           </td>
 
-                          <td className="p-4">
-                            <div dir="ltr" className="flex items-center gap-1.5 font-mono text-xs md:text-sm">
+                          <td className="p-4 text-center">
+                            <div dir="ltr" className="flex items-center justify-center gap-3 font-mono text-xs md:text-sm">
                               <span className="text-neutral-300">{formatPrice(entry, trade.market, trade.symbol)}</span>
                               <span className="text-neutral-500">&rarr;</span>
                               <span className="text-white font-bold">{formatPrice(exit, trade.market, trade.symbol)}</span>
@@ -912,7 +912,7 @@ export default function HistoryPage() {
                           <span className="block text-[9px] uppercase text-neutral-500">
                             أسعار التنفيذ (Entry &rarr; Exit):
                           </span>
-                          <div dir="ltr" className="flex items-center gap-1 font-mono text-xs">
+                          <div dir="ltr" className="flex items-center gap-2 font-mono text-xs">
                             <span className="text-neutral-300">{formatPrice(entry, trade.market, trade.symbol)}</span>
                             <span className="text-neutral-500">&rarr;</span>
                             <span className="text-white font-bold">{formatPrice(exit, trade.market, trade.symbol)}</span>
