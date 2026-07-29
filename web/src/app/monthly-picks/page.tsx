@@ -58,6 +58,35 @@ export default function MonthlyPicksPage() {
   const [error, setError] = useState<string | null>(null);
   const [expiredCount, setExpiredCount] = useState<number>(0);
 
+  // Shared Live Price State Dictionary
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+
+  const activeSymbolsStr = React.useMemo(() => {
+    const symbolsFromSignals = signals.map((s) => s.symbol);
+    const symbolsFromPortfolio = portfolio.map((p) => p.symbol);
+    return Array.from(new Set([...symbolsFromSignals, ...symbolsFromPortfolio])).filter(Boolean).join(',');
+  }, [signals, portfolio]);
+
+  useEffect(() => {
+    if (!activeSymbolsStr) return;
+
+    const fetchLivePrices = async () => {
+      try {
+        const res = await fetch(`/api/prices/batch?symbols=${activeSymbolsStr}&t=${Date.now()}`);
+        const data = await res.json();
+        if (data.prices && typeof data.prices === 'object') {
+          setLivePrices((prev) => ({ ...prev, ...data.prices }));
+        }
+      } catch (err) {
+        console.error("Failed to poll live prices:", err);
+      }
+    };
+
+    fetchLivePrices();
+    const interval = setInterval(fetchLivePrices, 10000);
+    return () => clearInterval(interval);
+  }, [activeSymbolsStr]);
+
   // Execute Modal State
   const [isExecModalOpen, setIsExecModalOpen] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
@@ -342,14 +371,11 @@ export default function MonthlyPicksPage() {
               </thead>
               <tbody className="divide-y divide-neutral-900/40">
                 {activePortfolio.map((item) => {
-                  const current = item.currentPrice || item.actualEntryPrice || 0;
-                  const pnl = item.currentPnL !== undefined ? item.currentPnL : 0;
-                  const pnlPct =
-                    item.pnlPercentage !== undefined
-                      ? item.pnlPercentage
-                      : item.actualEntryPrice > 0
-                      ? ((current - item.actualEntryPrice) / item.actualEntryPrice) * 100
-                      : 0;
+                  const liveSymbolPrice = livePrices[item.symbol] || item.currentPrice || item.actualEntryPrice || 0;
+                  const qty = item.quantity || (item.actualEntryPrice > 0 ? item.positionSize / item.actualEntryPrice : 0);
+                  const liveInvestedValue = liveSymbolPrice * qty;
+                  const livePnL = (liveSymbolPrice - item.actualEntryPrice) * qty;
+                  const livePnLPct = item.actualEntryPrice > 0 ? ((liveSymbolPrice - item.actualEntryPrice) / item.actualEntryPrice) * 100 : 0;
 
                   return (
                     <tr key={item._id} className="hover:bg-neutral-900/20 transition duration-200">
@@ -362,22 +388,22 @@ export default function MonthlyPicksPage() {
                         {formatPrice(item.actualEntryPrice, item.market, item.symbol)}
                       </td>
                       <td className="p-4 text-neutral-350 font-mono">
-                        {item.quantity || 0}
+                        {qty}
                       </td>
-                      <td className="p-4 text-neutral-100 font-mono">
-                        {formatPrice(current, item.market, item.symbol)}
+                      <td className="p-4 text-neutral-100 font-mono font-bold">
+                        {formatPrice(liveSymbolPrice, item.market, item.symbol)}
                       </td>
-                      <td className="p-4 text-neutral-200 font-mono">
-                        {formatPrice(item.positionSize, item.market, item.symbol)}
+                      <td className="p-4 text-neutral-200 font-mono font-bold">
+                        {formatPrice(liveInvestedValue, item.market, item.symbol)}
                       </td>
                       <td className="p-4 text-neutral-350 font-mono">
                         {formatPrice(item.brokerFees || 0, item.market, item.symbol)}
                       </td>
-                      <td className={`p-4 font-bold font-mono ${pnl >= 0 ? 'text-white' : 'text-neutral-500'}`}>
-                        {formatPrice(pnl, item.market, item.symbol)}{' '}
+                      <td className={`p-4 font-bold font-mono ${livePnL >= 0 ? 'text-white' : 'text-neutral-500'}`}>
+                        {formatPrice(livePnL, item.market, item.symbol)}{' '}
                         <span dir="ltr" className="inline-block">
-                          ({pnl >= 0 ? '+' : ''}
-                          {pnlPct.toFixed(2)}%)
+                          ({livePnL >= 0 ? '+' : ''}
+                          {livePnLPct.toFixed(2)}%)
                         </span>
                       </td>
                       <td className="p-4 text-neutral-500 font-mono">{formatDate(item.executedAt)}</td>
@@ -386,7 +412,7 @@ export default function MonthlyPicksPage() {
                           <button
                             onClick={() => {
                               setSelectedPortfolioItem(item);
-                              setScalePrice(current || item.actualEntryPrice);
+                              setScalePrice(liveSymbolPrice || item.actualEntryPrice);
                               setScaleAction('BUY_MORE');
                               setScaleQty('');
                               setScaleFees('0');
@@ -399,7 +425,7 @@ export default function MonthlyPicksPage() {
                           <button
                             onClick={() => {
                               setSelectedPortfolioItem(item);
-                              setExitPrice(current || item.actualEntryPrice);
+                              setExitPrice(liveSymbolPrice || item.actualEntryPrice);
                               setCloseReason('Manual Close');
                               setIsCloseModalOpen(true);
                             }}

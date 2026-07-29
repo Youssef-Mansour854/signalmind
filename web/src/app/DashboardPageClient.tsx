@@ -241,6 +241,34 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [marketFilter, portfolioType, timeframe]);
 
+  // Collect active symbols for live 10-second price polling
+  const activeSymbolsStr = React.useMemo(() => {
+    const symbolsFromSignals = signals.map((s) => s.symbol);
+    const symbolsFromPositions = (portfolioStats?.positions || []).map((p) => p.symbol);
+    return Array.from(new Set([...symbolsFromSignals, ...symbolsFromPositions])).filter(Boolean).join(',');
+  }, [signals, portfolioStats?.positions]);
+
+  // Client-Side Live Ticker Polling Interval (Every 10 seconds)
+  useEffect(() => {
+    if (!activeSymbolsStr) return;
+
+    const fetchLivePrices = async () => {
+      try {
+        const res = await fetch(`/api/prices/batch?symbols=${activeSymbolsStr}&t=${Date.now()}`);
+        const data = await res.json();
+        if (data.prices && typeof data.prices === 'object') {
+          setLivePrices((prev) => ({ ...prev, ...data.prices }));
+        }
+      } catch (err) {
+        console.error("Failed to poll live prices:", err);
+      }
+    };
+
+    fetchLivePrices(); // Initial call
+    const interval = setInterval(fetchLivePrices, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, [activeSymbolsStr]);
+
   // US Market Open Precision Trigger (09:30:00 AM NY Time)
   useEffect(() => {
     const calculateMsUntilMarketOpen = (): number | null => {

@@ -116,14 +116,13 @@ export async function GET(request: Request) {
     const symbolMap: Record<string, number> = {};
 
     if (activePositions.length > 0) {
-      const symbolsToFetch = Array.from(new Set(activePositions.map((pos) => ({
-        symbol: pos.symbol,
-        market: pos.market
-      }))));
+      const symbolsToFetch = Array.from(new Set(activePositions.map((pos) => pos.symbol)));
 
       await Promise.all(
-        symbolsToFetch.map(async ({ symbol, market: itemMarket }) => {
+        symbolsToFetch.map(async (symbol) => {
           try {
+            const posDoc = activePositions.find((p) => p.symbol === symbol);
+            const itemMarket = posDoc?.market || 'US';
             const price = await fetchResilientLivePrice(symbol, itemMarket);
             if (price && price > 0) {
               symbolMap[symbol] = price;
