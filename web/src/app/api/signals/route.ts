@@ -26,21 +26,27 @@ export async function GET(request: Request) {
     const timeframe = searchParams.get('timeframe');
     if (timeframe) query.timeframe = timeframe;
     
-    // 2. Strict status check: only return status: 'ACTIVE' by default unless querying history
-    if (status === 'Closed' || status === 'Win' || status === 'Loss' || status === 'Expired' || status === 'EXPIRED' || status === 'EXECUTED') {
+    // 2. Status check: support 'all', specific statuses, or default to active
+    if (status === 'all' || status === 'All' || status === 'ALL') {
+      // Do not filter by query.status so all statuses are returned
+    } else if (status === 'Closed' || status === 'Win' || status === 'Loss' || status === 'Expired' || status === 'EXPIRED' || status === 'EXECUTED' || status === 'SUCCESS' || status === 'FAILED') {
       if (status === 'Closed') {
-        query.status = { $in: ['EXPIRED', 'EXECUTED', 'Hit TP', 'Hit SL', 'Expired'] };
+        query.status = { $in: ['EXPIRED', 'EXECUTED', 'Hit TP', 'Hit SL', 'Expired', 'SUCCESS', 'FAILED'] };
       } else if (status === 'Win') {
-        query.status = { $in: ['EXECUTED', 'Hit TP'] };
+        query.status = { $in: ['EXECUTED', 'Hit TP', 'SUCCESS'] };
       } else if (status === 'Loss') {
-        query.status = { $in: ['EXECUTED', 'Hit SL'] };
+        query.status = { $in: ['EXECUTED', 'Hit SL', 'FAILED'] };
       } else if (status === 'Expired' || status === 'EXPIRED') {
         query.status = { $in: ['EXPIRED', 'Expired'] };
       } else {
         query.status = status;
       }
+    } else if (status === 'Active' || status === 'ACTIVE') {
+      query.status = { $in: ['ACTIVE', 'Active', 'Pending'] };
+    } else if (status) {
+      query.status = status;
     } else {
-      query.status = 'ACTIVE';
+      query.status = { $in: ['ACTIVE', 'Active', 'Pending'] };
     }
 
     // Retrieve signals sorted by rank (ascending) and date (descending)

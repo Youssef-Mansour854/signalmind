@@ -12,9 +12,10 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired' | 'SUCCESS' | 'FAILED';
   expiresAt?: string;
   exitPrice?: number;
+  pnlPercentage?: number;
   timeframe?: string;
   signalStrength?: 'قوية' | 'متوسطة';
   createdAt: string;
@@ -167,7 +168,7 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/signals?status=Active&limit=100&market=${marketFilter}`);
+      const res = await fetch(`/api/signals?status=all&limit=100&market=${marketFilter}`);
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setSignals(json.data);
@@ -346,9 +347,125 @@ export default function DashboardPage() {
     return marketFilter === 'EGX' ? `${formatted} ج.م` : `$${formatted}`;
   };
 
+  const renderStatusBadge = (signal: Signal, isStrong: boolean) => {
+    const statusRaw = signal.status || 'ACTIVE';
+    const statusUpper = statusRaw.toUpperCase();
+
+    if (statusUpper === 'ACTIVE' || statusRaw === 'Active') {
+      return (
+        <span
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+            isStrong
+              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+              : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
+          }`}
+        >
+          نشطة
+        </span>
+      );
+    }
+
+    if (statusUpper === 'PENDING' || statusRaw === 'Pending') {
+      return (
+        <span
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+            isStrong
+              ? 'bg-amber-100 text-amber-800 border-amber-300'
+              : 'bg-amber-950/60 text-amber-400 border-amber-800/60'
+          }`}
+        >
+          قيد الانتظار
+        </span>
+      );
+    }
+
+    if (statusUpper === 'EXPIRED' || statusRaw === 'Expired') {
+      return (
+        <span
+          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+            isStrong
+              ? 'bg-neutral-200 text-neutral-700 border-neutral-400'
+              : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+          }`}
+        >
+          منتهية
+        </span>
+      );
+    }
+
+    // Completed signals (Hit TP, Hit SL, EXECUTED, SUCCESS, FAILED, Closed, etc.)
+    let pnl = signal.pnlPercentage;
+    if (typeof pnl !== 'number') {
+      if (signal.exitPrice && signal.entryPrice) {
+        pnl = ((signal.exitPrice - signal.entryPrice) / signal.entryPrice) * 100;
+      } else if (
+        (statusUpper === 'HIT TP' || statusUpper === 'SUCCESS') &&
+        signal.takeProfit &&
+        signal.entryPrice
+      ) {
+        pnl = ((signal.takeProfit - signal.entryPrice) / signal.entryPrice) * 100;
+      } else if (
+        (statusUpper === 'HIT SL' || statusUpper === 'FAILED') &&
+        signal.stopLoss &&
+        signal.entryPrice
+      ) {
+        pnl = ((signal.stopLoss - signal.entryPrice) / signal.entryPrice) * 100;
+      }
+    }
+
+    const pnlFormatted =
+      typeof pnl === 'number' ? ` ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%` : '';
+
+    const isWin =
+      (typeof pnl === 'number' && pnl >= 0) ||
+      statusUpper === 'HIT TP' ||
+      statusUpper === 'SUCCESS';
+
+    return (
+      <span
+        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+          isWin
+            ? isStrong
+              ? 'bg-emerald-600 text-white border-emerald-700'
+              : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+            : isStrong
+              ? 'bg-red-600 text-white border-red-700'
+              : 'bg-red-950/80 text-red-400 border-red-800/80'
+        }`}
+      >
+        مكتملة{pnlFormatted}
+      </span>
+    );
+  };
+
   const getWidgetSignals = (tf: string) => {
+    if (tf === 'يومي') {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0); // 12:00 AM today in local timezone
+
+      const todaysPicks = signals.filter((signal) => {
+        const createdAt = new Date(signal.createdAt);
+        const isCreatedToday = createdAt >= startOfToday;
+
+        // Include if it was created today OR if it's an active intraday trade
+        const isIntradayActive =
+          signal.timeframe === 'يومي' &&
+          (signal.status === 'ACTIVE' || signal.status === 'Active' || signal.status === 'Pending');
+
+        return isCreatedToday || isIntradayActive;
+      });
+
+      return todaysPicks
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 3);
+    }
+
     return signals
-      .filter((s) => s.timeframe === tf)
+      .filter(
+        (s) =>
+          s.timeframe === tf &&
+          (s.status === 'ACTIVE' || s.status === 'Active' || s.status === 'Pending')
+      )
       .sort((a, b) => {
         // Sort "قوية" first
         if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
@@ -370,7 +487,9 @@ export default function DashboardPage() {
               <span className="text-sm shrink-0">{badgeIcon}</span>
               <h2 className="text-sm font-black tracking-tight text-white truncate">{title}</h2>
             </div>
-            <span className="text-[10px] text-neutral-500 font-mono shrink-0">ACTIVE / PENDING</span>
+            <span className="text-[10px] text-neutral-500 font-mono shrink-0">
+              {timeframeKey === 'يومي' ? "TODAY'S PICKS" : 'ACTIVE / PENDING'}
+            </span>
           </div>
 
           {/* Widget List */}
@@ -378,7 +497,7 @@ export default function DashboardPage() {
             <div className="py-12 text-center text-xs font-mono text-neutral-500">LOADING...</div>
           ) : widgetSignals.length === 0 ? (
             <div className="py-12 text-center text-xs text-neutral-600 font-sans border border-dashed border-neutral-900 rounded">
-              لا توجد إشارات نشطة حالياً.
+              {timeframeKey === 'يومي' ? 'لا توجد فرص منشأة اليوم حتى الآن.' : 'لا توجد إشارات نشطة حالياً.'}
             </div>
           ) : (
             <div className="space-y-3">
@@ -394,7 +513,7 @@ export default function DashboardPage() {
                     }`}
                   >
                     <div className="flex justify-between items-center mb-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className={`text-[9px] font-mono border rounded px-1.5 py-0.5 shrink-0 ${
                           isStrong ? 'bg-black text-white border-black' : 'bg-neutral-900 text-neutral-400 border-neutral-800'
                         }`}>
@@ -403,6 +522,7 @@ export default function DashboardPage() {
                         <span className={`text-[10px] font-bold shrink-0 ${isStrong ? 'text-black' : 'text-neutral-400'}`}>
                           {isStrong ? '★ قوية' : '☆ متوسطة'}
                         </span>
+                        {renderStatusBadge(signal, isStrong)}
                       </div>
                       <Link href={`/stock/${signal.symbol}`} className={`font-black text-sm tracking-wide hover:underline truncate transition-colors ${isStrong ? 'text-black hover:text-blue-600' : 'text-white hover:text-blue-400'}`}>
                         {signal.symbol}
