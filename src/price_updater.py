@@ -124,20 +124,27 @@ class SignalPriceUpdater:
 
             new_status = status
 
-            # Logic for activation (Pending -> Active)
-            # For BUY signal, it becomes active when current price is <= entry price
+            ENTRY_TOLERANCE_PCT = 0.003  # 0.3% buffer
+            signal_type = sig.get("signalType", "BUY")
+
+            # Entry Tolerance logic (Pending -> Active)
             if status == "Pending":
-                created_at = sig.get("createdAt")
-                created_today = False
-                if created_at:
-                    created_today = created_at.date() == now.date()
-                
-                limit_multiplier = 1.03 if created_today else 1.02
-                if current_price <= entry_price * limit_multiplier:
-                    new_status = "Active"
-                    update_fields["status"] = "Active"
-                    update_fields["activatedAt"] = now
-                    print(f"[ACTIVATED] Signal {symbol} activated! Current price {current_price:.2f} <= entry {entry_price * limit_multiplier:.2f} (buffer: {limit_multiplier:.2f})")
+                if signal_type == "BUY":
+                    acceptable_entry_max = entry_price * (1 + ENTRY_TOLERANCE_PCT)
+                    if current_price <= acceptable_entry_max:
+                        new_status = "Active"
+                        update_fields["status"] = "Active"
+                        update_fields["activatedAt"] = now
+                        update_fields["actualEntryPrice"] = round(current_price, 4)  # Save real execution price, NOT original signalEntryPrice
+                        print(f"[ACTIVATED BUY] Signal {symbol} activated at live price {current_price:.4f} <= max entry threshold {acceptable_entry_max:.4f}")
+                elif signal_type == "SELL":
+                    acceptable_entry_min = entry_price * (1 - ENTRY_TOLERANCE_PCT)
+                    if current_price >= acceptable_entry_min:
+                        new_status = "Active"
+                        update_fields["status"] = "Active"
+                        update_fields["activatedAt"] = now
+                        update_fields["actualEntryPrice"] = round(current_price, 4)  # Save real execution price
+                        print(f"[ACTIVATED SELL] Signal {symbol} activated at live price {current_price:.4f} >= min entry threshold {acceptable_entry_min:.4f}")
 
             # Logic for target hits (Active/Pending -> Hit TP/SL)
             if new_status in ("Active", "Pending"):

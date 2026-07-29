@@ -6,6 +6,7 @@ import { Groq } from 'groq-sdk';
 import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
+import { checkEntryTrigger } from '@/lib/executionEngine';
 
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
@@ -176,6 +177,11 @@ ${timeframePromptContext}
     const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
     const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
 
+    const signalType = parsed.signalType || 'BUY';
+    const entryCheck = checkEntryTrigger(signalType, entry, latestPrice);
+    const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+    const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
+
     // Deduplication: before inserting the new signal, find existing active ones for symbol and timeframe, and set to EXPIRED
     await Signal.updateMany(
       { symbol, timeframe: targetTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
@@ -188,12 +194,13 @@ ${timeframePromptContext}
     const newSignal = new Signal({
       symbol,
       market,
-      signalType: parsed.signalType || 'HOLD',
+      signalType,
       entryPrice: entry,
+      actualEntryPrice,
       stopLoss: sl,
       takeProfit: tp,
       currentPrice: latestPrice,
-      status: 'ACTIVE',
+      status: initialStatus,
       expiresAt,
       aiConfidence: parsed.aiConfidence || 'Medium',
       aiRisk: parsed.aiRisk || 'Medium',

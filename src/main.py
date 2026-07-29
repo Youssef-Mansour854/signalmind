@@ -264,11 +264,21 @@ async def main_async():
                     ai_confidence=ai_confidence
                 )
 
-                # Determine status and initial activation
-                status = "Expired"
+                # Determine status and initial activation via Entry Tolerance (0.3% buffer)
+                ENTRY_TOLERANCE_PCT = 0.003
+                current_price = float(stock_data.get("close", 0))
+                actual_entry_price = current_price
+                status = "Pending"
+
                 if signal_type == "BUY":
-                    current_price = float(stock_data.get("close", 0))
-                    if current_price <= entry_price * 1.03:
+                    acceptable_entry_max = entry_price * (1 + ENTRY_TOLERANCE_PCT)
+                    if current_price <= acceptable_entry_max:
+                        status = "Active"
+                    else:
+                        status = "Pending"
+                elif signal_type == "SELL":
+                    acceptable_entry_min = entry_price * (1 - ENTRY_TOLERANCE_PCT)
+                    if current_price >= acceptable_entry_min:
                         status = "Active"
                     else:
                         status = "Pending"
@@ -279,10 +289,11 @@ async def main_async():
                     "market": market,
                     "signalType": signal_type,
                     "entryPrice": entry_price,
+                    "actualEntryPrice": actual_entry_price,  # Real execution price saved in MongoDB
                     "stopLoss": stop_loss,
                     "takeProfit": take_profit,
-                    "currentPrice": float(stock_data.get("close", 0)),
-                    "maxPriceReached": float(stock_data.get("close", 0)),
+                    "currentPrice": current_price,
+                    "maxPriceReached": current_price,
                     "status": status,
                     "isNearTP": False,
                     "indicators": db_indicators,

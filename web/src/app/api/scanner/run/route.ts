@@ -7,6 +7,7 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 import { fetchMarketData, StaleDataError } from '@/utils/marketFetcher';
+import { checkEntryTrigger } from '@/lib/executionEngine';
 
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
@@ -233,6 +234,11 @@ export async function POST(request: Request) {
         const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
         const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
 
+        const signalType = parsed.signalType || 'BUY';
+        const entryCheck = checkEntryTrigger(signalType, entry, latestPrice);
+        const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+        const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
+
         // Deduplication: Before inserting a new signal for a specific symbol and timeframe,
         // find any existing 'ACTIVE'/'Active'/'Pending' signals for that same symbol/timeframe and update status to 'EXPIRED'
         await Signal.updateMany(
@@ -247,12 +253,13 @@ export async function POST(request: Request) {
         const newSignal = new Signal({
           symbol,
           market,
-          signalType: parsed.signalType || 'HOLD',
+          signalType,
           entryPrice: entry,
+          actualEntryPrice,
           stopLoss: sl,
           takeProfit: tp,
           currentPrice: latestPrice,
-          status: 'ACTIVE',
+          status: initialStatus,
           expiresAt,
           aiConfidence: parsed.aiConfidence || 'Medium',
           aiRisk: parsed.aiRisk || 'Medium',

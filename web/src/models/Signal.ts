@@ -7,6 +7,7 @@ export interface ISignal extends Document {
   
   // Price points
   entryPrice: number;
+  actualEntryPrice?: number;
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
@@ -70,6 +71,7 @@ const SignalSchema = new Schema<ISignal>(
     market: { type: String, enum: ['US', 'EGX'], required: true, index: true },
     signalType: { type: String, enum: ['BUY', 'SELL', 'HOLD'], required: true, index: true },
     entryPrice: { type: Number, required: true },
+    actualEntryPrice: { type: Number },
     stopLoss: { type: Number, required: true },
     takeProfit: { type: Number, required: true },
     currentPrice: { type: Number, required: true },
