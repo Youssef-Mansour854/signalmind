@@ -70,11 +70,13 @@ export async function getCleanedHistory(): Promise<HistoryItem[]> {
     const positionSize = s.market === 'EGX' ? 5000 : 1000;
     
     let pnlPercentage = s.pnlPercentage;
-    if (pnlPercentage === undefined || pnlPercentage === null) {
+    if (s.status === 'EXPIRED' || s.status === 'Expired') {
+      pnlPercentage = 0;
+    } else if (pnlPercentage === undefined || pnlPercentage === null) {
       pnlPercentage = Number((((exitPrice - entryPrice) / entryPrice) * 100).toFixed(2));
     }
 
-    const cashPnL = positionSize * (pnlPercentage / 100);
+    const cashPnL = (s.status === 'EXPIRED' || s.status === 'Expired') ? 0 : positionSize * (pnlPercentage / 100);
     const effectiveMax = Math.max(s.maxPriceReached || entryPrice, exitPrice || 0);
     const maxPeakPercentage = entryPrice > 0 ? ((effectiveMax - entryPrice) / entryPrice) * 100 : 0;
 

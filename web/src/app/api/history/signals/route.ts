@@ -40,10 +40,29 @@ export async function GET(request: Request) {
     let rrrCount = 0;
 
     allResolvedSignals.forEach((s) => {
-      const pnl = s.pnlPercentage || 0;
+      const isExpired = s.status === 'EXPIRED' || s.status === 'Expired';
+      if (isExpired) {
+        expiredCount++;
+        s.pnlPercentage = 0; // Strictly zero-out ghost data for expired trades
+        return; // Excluded from Win Rate, AVG RR, and Profit Factor calculations
+      }
+
+      const entryPrice = s.entryPrice || 0;
+      const exitPrice = s.exitPrice !== undefined 
+        ? s.exitPrice 
+        : (s.status === 'SUCCESS' || s.status === 'Hit TP' ? s.takeProfit : (s.status === 'FAILED' || s.status === 'Hit SL' ? s.stopLoss : s.currentPrice));
+
+      let pnlPct = 0;
+      if (entryPrice > 0 && exitPrice > 0) {
+        pnlPct = ((exitPrice - entryPrice) / entryPrice) * 100;
+      } else if (s.pnlPercentage !== undefined && s.pnlPercentage !== null) {
+        pnlPct = s.pnlPercentage;
+      }
+      s.pnlPercentage = Number(pnlPct.toFixed(2));
+      const pnl = s.pnlPercentage;
+
       const isWin = s.status === 'SUCCESS' || s.status === 'Hit TP' || (s.status === 'EXECUTED' && pnl > 0);
       const isLoss = s.status === 'FAILED' || s.status === 'Hit SL' || (s.status === 'EXECUTED' && pnl <= 0);
-      const isExpired = s.status === 'EXPIRED' || s.status === 'Expired';
 
       if (isWin) {
         winsCount++;
@@ -51,11 +70,9 @@ export async function GET(request: Request) {
       } else if (isLoss) {
         lossesCount++;
         totalLossPnl += Math.abs(pnl);
-      } else if (isExpired) {
-        expiredCount++;
       }
 
-      if (!isExpired && s.scoreMetrics?.riskRewardRatio && s.scoreMetrics.riskRewardRatio > 0) {
+      if (s.scoreMetrics?.riskRewardRatio && s.scoreMetrics.riskRewardRatio > 0) {
         totalRRR += s.scoreMetrics.riskRewardRatio;
         rrrCount++;
       }
@@ -65,12 +82,13 @@ export async function GET(request: Request) {
     const validTrades = winsCount + lossesCount;
     const winRate = validTrades > 0 ? Number(((winsCount / validTrades) * 100).toFixed(1)) : 0;
     
-    let profitFactor = '0.00';
-    if (totalLossPnl > 0) {
-      profitFactor = (totalWinPnl / totalLossPnl).toFixed(2);
-    } else if (totalWinPnl > 0) {
-      profitFactor = '∞';
-    }
+    // Profit Factor calculation with Infinity (∞) fix
+    const totalGrossLoss = Math.abs(totalLossPnl);
+    const calculatedGrossProfit = totalWinPnl;
+    const pfVal = totalGrossLoss === 0 
+      ? (calculatedGrossProfit > 0 ? 999 : 0) 
+      : (calculatedGrossProfit / totalGrossLoss);
+    const profitFactor = pfVal.toFixed(2);
 
     const avgRRR = rrrCount > 0 ? (totalRRR / rrrCount).toFixed(2) : '0.00';
 
@@ -91,10 +109,26 @@ export async function GET(request: Request) {
     }
 
     const total = await Signal.countDocuments(listQuery);
-    const signals = await Signal.find(listQuery)
+    const rawSignals = await Signal.find(listQuery)
       .sort({ closedAt: -1, updatedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    const signals = rawSignals.map((s) => {
+      const obj = s.toObject ? s.toObject() : { ...s };
+      if (obj.status === 'EXPIRED' || obj.status === 'Expired') {
+        obj.pnlPercentage = 0;
+      } else {
+        const entryPrice = obj.entryPrice || 0;
+        const exitPrice = obj.exitPrice !== undefined 
+          ? obj.exitPrice 
+          : (obj.status === 'SUCCESS' || obj.status === 'Hit TP' ? obj.takeProfit : (obj.status === 'FAILED' || obj.status === 'Hit SL' ? obj.stopLoss : obj.currentPrice));
+        if (entryPrice > 0 && exitPrice > 0) {
+          obj.pnlPercentage = Number((((exitPrice - entryPrice) / entryPrice) * 100).toFixed(2));
+        }
+      }
+      return obj;
+    });
 
     return NextResponse.json({
       success: true,
