@@ -7,7 +7,7 @@ import dbConnect from '@/lib/mongodb';
 import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 import { fetchMarketData, StaleDataError } from '@/utils/marketFetcher';
-import { checkEntryTrigger } from '@/lib/executionEngine';
+import { checkEntryTrigger, evaluateExecutionTrigger } from '@/lib/executionEngine';
 
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
         const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
 
         const signalType = parsed.signalType || 'BUY';
-        const entryCheck = checkEntryTrigger(signalType, entry, latestPrice);
+        const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
         const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
         const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
 
