@@ -549,7 +549,7 @@ export default function HistoryPage() {
                         >
                           <td className="p-4 font-bold tracking-wide">
                             <div className="flex items-center gap-2">
-                              <Link href={`/stock/${trade.symbol}`} className={`text-base font-black hover:underline ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white hover:text-neutral-200'}`}>
+                              <Link href={`/stock/${trade.symbol}`} className={`text-base font-black hover:underline transition-colors ${isStrong ? 'text-black hover:text-blue-600' : 'text-white hover:text-blue-400'}`}>
                                 {trade.symbol}
                               </Link>
                               {getTimeframeBadge(trade.timeframe)}
@@ -629,7 +629,7 @@ export default function HistoryPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Link href={`/stock/${trade.symbol}`} className={`font-black text-sm hover:underline ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white hover:text-neutral-200'}`}>
+                        <Link href={`/stock/${trade.symbol}`} className={`font-black text-sm hover:underline transition-colors ${isStrong ? 'text-black hover:text-blue-600' : 'text-white hover:text-blue-400'}`}>
                           {trade.symbol}
                         </Link>
                         <div className="flex items-center gap-1">

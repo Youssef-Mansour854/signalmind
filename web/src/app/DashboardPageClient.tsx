@@ -404,7 +404,7 @@ export default function DashboardPage() {
                           {isStrong ? '★ قوية' : '☆ متوسطة'}
                         </span>
                       </div>
-                      <Link href={`/stock/${signal.symbol}`} className="font-black text-sm tracking-wide hover:underline hover:text-white truncate">
+                      <Link href={`/stock/${signal.symbol}`} className={`font-black text-sm tracking-wide hover:underline truncate transition-colors ${isStrong ? 'text-black hover:text-blue-600' : 'text-white hover:text-blue-400'}`}>
                         {signal.symbol}
                       </Link>
                     </div>

@@ -380,7 +380,7 @@ export default function SwingTradesPage() {
                   return (
                     <tr key={item._id} className="hover:bg-neutral-900/20 transition duration-200">
                       <td className="p-4 font-bold text-white tracking-wide">
-                        <Link href={`/stock/${item.symbol}`} className="hover:underline hover:text-white">
+                        <Link href={`/stock/${item.symbol}`} className="hover:underline hover:text-blue-400 transition-colors">
                           {item.symbol}
                         </Link>
                       </td>
@@ -492,7 +492,7 @@ export default function SwingTradesPage() {
                     >
                       <td className="p-4 font-bold tracking-wide">
                         <div className="flex flex-col">
-                          <Link href={`/stock/${signal.symbol}`} className={`hover:underline font-bold text-sm ${isStrong ? 'text-black hover:text-neutral-800' : 'text-white'}`}>
+                          <Link href={`/stock/${signal.symbol}`} className={`hover:underline font-bold text-sm transition-colors ${isStrong ? 'text-black hover:text-blue-600' : 'text-white hover:text-blue-400'}`}>
                             {signal.symbol}
                           </Link>
                           <span className={`text-[9px] mt-0.5 ${isStrong ? 'text-neutral-700' : 'text-neutral-500'}`}>
