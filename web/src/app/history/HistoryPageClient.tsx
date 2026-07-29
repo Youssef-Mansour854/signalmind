@@ -460,6 +460,7 @@ export default function HistoryPage() {
             <div className="border border-neutral-900 bg-neutral-950 p-4 rounded-lg flex flex-col justify-between">
               <span className="text-[9px] text-neutral-500 font-mono font-bold tracking-wider uppercase block">STATS / الإحصائيات الشاملة</span>
               <span className="text-xl font-black text-white mt-2 block font-mono">
+                {/* Strictly mapped counts: W (winsCount), L (lossesCount), Exp (expiredCount) */}
                 <span className="text-emerald-400">{signalStats.winsCount} W</span> / <span className="text-red-400">{signalStats.lossesCount} L</span> / <span className="text-neutral-400">{signalStats.expiredCount} Exp</span>
               </span>
             </div>

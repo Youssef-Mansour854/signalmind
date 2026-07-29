@@ -61,6 +61,7 @@ export async function GET(request: Request) {
       }
     });
 
+    // Win Rate formula: (winsCount / (winsCount + lossesCount)) * 100
     const validTrades = winsCount + lossesCount;
     const winRate = validTrades > 0 ? Number(((winsCount / validTrades) * 100).toFixed(1)) : 0;
     
