@@ -447,44 +447,22 @@ export default function DashboardPage() {
     );
   };
 
-  const isTimeframeMatch = (signalTf: string | undefined, widgetTf: string): boolean => {
-    if (!signalTf) return false;
-    const stf = signalTf.toUpperCase();
-    const wtf = widgetTf.toUpperCase();
-
-    if (wtf === 'أسبوعي' || wtf === 'SWING' || wtf === 'WEEK') {
-      return stf === 'أسبوعي' || stf === 'SWING' || stf === 'WEEK';
-    }
-    if (wtf === 'شهري' || wtf === 'MONTHLY' || wtf === 'MONTH') {
-      return stf === 'شهري' || stf === 'MONTHLY' || stf === 'MONTH';
-    }
-    if (wtf === 'استثمار سنوي' || wtf === 'YEARLY' || wtf === 'YEAR') {
-      return stf === 'استثمار سنوي' || stf === 'YEARLY' || stf === 'YEAR';
-    }
-    if (wtf === 'يومي' || wtf === 'DAY_TRADE' || wtf === 'DAY') {
-      return stf === 'يومي' || stf === 'DAY_TRADE' || stf === 'DAY';
-    }
-
-    return signalTf === widgetTf;
-  };
-
   const getWidgetSignals = (tf: string) => {
-    const isDaily = tf === 'يومي' || tf === 'DAY_TRADE';
+    const tfNormalized = (tf || '').toUpperCase();
 
-    if (isDaily) {
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0); // 12:00 AM today in local timezone
+    // 1. Today's Picks Widget: ONLY signals created in last 24h (any status/timeframe) OR active Day Trades
+    if (tfNormalized === 'يومي' || tfNormalized === 'DAY_TRADE' || tfNormalized === 'DAY') {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      const todaysPicks = signals.filter((signal) => {
-        const createdAt = new Date(signal.createdAt);
-        const isCreatedToday = createdAt >= startOfToday;
-
-        // Include if it was created today OR if it's an active intraday trade
+      const todaysPicks = signals.filter((s) => {
+        const isRecent = new Date(s.createdAt) >= twentyFourHoursAgo;
+        const sTfUpper = (s.timeframe || '').toUpperCase();
+        const sStatusLower = (s.status || '').toLowerCase();
         const isIntradayActive =
-          isTimeframeMatch(signal.timeframe, 'يومي') &&
-          (signal.status === 'ACTIVE' || signal.status === 'Active' || signal.status === 'Pending');
+          (sTfUpper === 'DAY_TRADE' || sTfUpper === 'DAY' || s.timeframe === 'يومي') &&
+          (sStatusLower === 'active' || sStatusLower === 'pending');
 
-        return isCreatedToday || isIntradayActive;
+        return isRecent || isIntradayActive;
       });
 
       return todaysPicks
@@ -492,18 +470,75 @@ export default function DashboardPage() {
         .slice(0, 3);
     }
 
-    // Weekly (SWING), Monthly (MONTHLY), Yearly (YEARLY) Widgets: Show active/pending signals regardless of createdAt
+    // 2. Weekly (Swing) Widget: ONLY Swing timeframe, MUST be active/pending, IGNORE date
+    if (tfNormalized === 'أسبوعي' || tfNormalized === 'SWING' || tfNormalized === 'WEEK') {
+      const weeklyPicks = signals.filter((s) => {
+        const sTfUpper = (s.timeframe || '').toUpperCase();
+        const isSwing = sTfUpper === 'SWING' || sTfUpper === 'WEEK' || s.timeframe === 'أسبوعي';
+        const sStatusLower = (s.status || '').toLowerCase();
+        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
+        return isSwing && isActive;
+      });
+
+      return weeklyPicks
+        .sort((a, b) => {
+          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
+          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
+          return 0;
+        })
+        .slice(0, 3);
+    }
+
+    // 3. Monthly Widget: ONLY Monthly timeframe, MUST be active/pending, IGNORE date
+    if (tfNormalized === 'شهري' || tfNormalized === 'MONTHLY' || tfNormalized === 'MONTH') {
+      const monthlyPicks = signals.filter((s) => {
+        const sTfUpper = (s.timeframe || '').toUpperCase();
+        const isMonthly = sTfUpper === 'MONTHLY' || sTfUpper === 'MONTH' || s.timeframe === 'شهري';
+        const sStatusLower = (s.status || '').toLowerCase();
+        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
+        return isMonthly && isActive;
+      });
+
+      return monthlyPicks
+        .sort((a, b) => {
+          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
+          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
+          return 0;
+        })
+        .slice(0, 3);
+    }
+
+    // 4. Yearly (Annual) Widget: ONLY Yearly timeframe, MUST be active/pending, IGNORE date
+    if (
+      tfNormalized === 'استثمار سنوي' ||
+      tfNormalized === 'YEARLY' ||
+      tfNormalized === 'YEAR'
+    ) {
+      const yearlyPicks = signals.filter((s) => {
+        const sTfUpper = (s.timeframe || '').toUpperCase();
+        const isYearly = sTfUpper === 'YEARLY' || sTfUpper === 'YEAR' || s.timeframe === 'استثمار سنوي';
+        const sStatusLower = (s.status || '').toLowerCase();
+        const isActive = sStatusLower === 'active' || sStatusLower === 'pending';
+        return isYearly && isActive;
+      });
+
+      return yearlyPicks
+        .sort((a, b) => {
+          if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
+          if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
+          return 0;
+        })
+        .slice(0, 3);
+    }
+
+    // Fallback filter
     return signals
-      .filter(
-        (s) =>
-          isTimeframeMatch(s.timeframe, tf) &&
-          (s.status === 'ACTIVE' || s.status === 'Active' || s.status === 'Pending')
-      )
-      .sort((a, b) => {
-        // Sort "قوية" first
-        if (a.signalStrength === 'قوية' && b.signalStrength !== 'قوية') return -1;
-        if (a.signalStrength !== 'قوية' && b.signalStrength === 'قوية') return 1;
-        return 0;
+      .filter((s) => {
+        const sStatusLower = (s.status || '').toLowerCase();
+        return (
+          s.timeframe === tf &&
+          (sStatusLower === 'active' || sStatusLower === 'pending')
+        );
       })
       .slice(0, 3);
   };
