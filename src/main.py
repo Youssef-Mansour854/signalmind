@@ -152,6 +152,20 @@ async def main_async():
                     market = "EGX" if symbol.endswith(".CA") else "US"
                     currency = "EGP" if market == "EGX" else "USD"
 
+                    # --- STRICT STEP 1: Deduplication Check (Prevent Spam) ---
+                    existing_signal_today = await asyncio.to_thread(
+                        signals_col.find_one,
+                        {
+                            "symbol": symbol,
+                            "status": {"$in": ["Active", "ACTIVE", "Pending"]},
+                            "createdAt": {"$gte": today_start}
+                        }
+                    )
+                    if existing_signal_today:
+                        print(f"Skipped {symbol}: Active/Pending signal already created today (Deduplication Check)")
+                        results.append({"status": "skipped", "symbol": symbol})
+                        continue
+
                     # Fetch stock data using analyzer
                     df_raw = await asyncio.to_thread(analyzer.fetch_data, symbol)
                     if df_raw is None or df_raw.empty:
@@ -322,24 +336,11 @@ async def main_async():
                     if status == "Active":
                         signal_doc["activatedAt"] = now
 
-                    res = await asyncio.to_thread(
-                        signals_col.update_one,
-                        {"symbol": symbol},
-                        {"$set": signal_doc},
-                        upsert=True
-                    )
-                    upserted_id = res.upserted_id
-                    if not upserted_id:
-                        existing_doc = await asyncio.to_thread(signals_col.find_one, {"symbol": symbol}, {"_id": 1})
-                        inserted_id = existing_doc["_id"] if existing_doc else None
-                    else:
-                        inserted_id = upserted_id
-
                     if signal_type == 'BUY':
                         generated_buy_docs.append(signal_doc)
-                        results.append({"status": "success", "symbol": symbol, "is_buy": True, "inserted_id": inserted_id})
+                        results.append({"status": "success", "symbol": symbol, "is_buy": True})
                     else:
-                        print(f"{symbol}: {signal_type} - saved to DB.")
+                        print(f"{symbol}: {signal_type} evaluated as candidate.")
                         results.append({"status": "success", "symbol": symbol, "is_buy": False})
 
                 except Exception as e:
@@ -361,9 +362,6 @@ async def main_async():
 
     failed_stocks = 0
     skipped_stocks = 0
-    buy_signals = 0
-    buy_symbols = []
-    inserted_ids = []
 
     for res in results:
         if isinstance(res, Exception):
@@ -374,17 +372,36 @@ async def main_async():
             failed_stocks += 1
         elif res.get("status") == "skipped":
             skipped_stocks += 1
-        elif res.get("status") == "success":
-            if res.get("is_buy"):
-                buy_signals += 1
-                buy_symbols.append(res.get("symbol"))
-                inserted_ids.append(res.get("inserted_id"))
 
-    # --- STRICT FILTER & CAP: Sort by Total Score and Slice TOP 5 Signals Only ---
+    # --- STRICT FILTER & CAP: Sort by Strength/Score and Slice TOP 5 Signals Only ---
     generated_buy_docs.sort(key=lambda x: x.get("scoreMetrics", {}).get("totalScore", 0), reverse=True)
     top_5_signals = generated_buy_docs[:5]
 
     print(f"\n🏆 Selected Top {len(top_5_signals)} Quantitative BUY Signals out of {len(generated_buy_docs)} candidates.")
+
+    # --- DATABASE INSERT: Only Save Top 5 Capped Signals to MongoDB ---
+    inserted_ids = []
+    buy_signals = len(top_5_signals)
+    buy_symbols = []
+
+    for sig_doc in top_5_signals:
+        sym = sig_doc["symbol"]
+        buy_symbols.append(sym)
+        res = await asyncio.to_thread(
+            signals_col.update_one,
+            {"symbol": sym},
+            {"$set": sig_doc},
+            upsert=True
+        )
+        upserted_id = res.upserted_id
+        if not upserted_id:
+            existing_doc = await asyncio.to_thread(signals_col.find_one, {"symbol": sym}, {"_id": 1})
+            inserted_id = existing_doc["_id"] if existing_doc else None
+        else:
+            inserted_id = upserted_id
+        if inserted_id:
+            inserted_ids.append(inserted_id)
+        print(f"[DATABASE INSERT] Saved capped signal for {sym}")
 
     # --- TELEGRAM BOT AGGREGATION: Send ONE aggregated message for Top 5 Signals ---
     if top_5_signals:

@@ -41,6 +41,27 @@ export async function POST(request: Request) {
       }
     }
 
+    // 1. Connect to DB & perform Deduplication Check (Prevent Spam)
+    await dbConnect();
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const existingSignalToday = await Signal.findOne({
+      symbol,
+      status: { $in: ['ACTIVE', 'Active', 'Pending'] },
+      createdAt: { $gte: startOfToday }
+    });
+
+    if (existingSignalToday) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: `تم التخطي: توجد إشارة نشطة/قيد الانتظار أُنشئت اليوم للسهم ${symbol} بالفعل.`,
+        data: existingSignalToday
+      });
+    }
+
     // 2. Fetch daily historical data (last 6 months)
     const today = new Date();
     const sixMonthsAgo = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000);
@@ -57,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: `لم يتم العثور على بيانات تاريخية للسهم ${symbol}` }, { status: 404 });
     }
 
-    // Filter valid close prices
+    // Filter valid close prices & check volume liquidity filter
     const closes = result
       .map((bar) => bar.close)
       .filter((c): c is number => typeof c === 'number' && c > 0);
@@ -66,6 +87,21 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: false,
         error: `البيانات التاريخية غير كافية لحساب المؤشرات الفنية (مطلوب على الأقل 26 إغلاق، وجد ${closes.length})`,
+      }, { status: 400 });
+    }
+
+    const volumes = result
+      .map((bar) => bar.volume)
+      .filter((v): v is number => typeof v === 'number' && v > 0);
+    const volAvg = volumes.length >= 20
+      ? volumes.slice(-20).reduce((a, b) => a + b, 0) / 20
+      : (volumes[volumes.length - 1] || 0);
+
+    const MIN_VOLUME = 1000000;
+    if (volAvg > 0 && volAvg < MIN_VOLUME) {
+      return NextResponse.json({
+        success: false,
+        error: `تم التخطي بسبب ضعف السيولة اليومية للسهم ${symbol} (متوسط الحجم ${Math.round(volAvg).toLocaleString()} < ${MIN_VOLUME.toLocaleString()})`
       }, { status: 400 });
     }
 

@@ -133,6 +133,22 @@ export async function POST(request: Request) {
       for (const item of chunk) {
         const { symbol, market } = item;
         try {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+
+          // --- STRICT STEP 1: Deduplication Check (Prevent Spam) ---
+          const existingSignalToday = await Signal.findOne({
+            symbol,
+            status: { $in: ['ACTIVE', 'Active', 'Pending'] },
+            createdAt: { $gte: startOfToday }
+          });
+
+          if (existingSignalToday) {
+            console.log(`[Deduplication] Skipped ${symbol}: Active/Pending signal already created today`);
+            resultsSummary.push(`${symbol}: تم التخطي لوجود إشارة نشطة منشأة اليوم (Deduplication Guard)`);
+            continue;
+          }
+
           // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
           const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
           const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
@@ -275,17 +291,10 @@ export async function POST(request: Request) {
           const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
           const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
 
-          // Deduplication: Before inserting a new signal for a specific symbol and timeframe,
-          // find any existing 'ACTIVE'/'Active'/'Pending' signals for that same symbol/timeframe and update status to 'EXPIRED'
-          await Signal.updateMany(
-            { symbol, timeframe: finalTimeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
-            { $set: { status: 'EXPIRED' } }
-          );
-
           const createdAt = new Date();
           const expiresAt = getExpirationDate(finalTimeframe, createdAt);
 
-          // 5. Save Signal to MongoDB (Insert new document)
+          // 5. Construct Signal document in-memory (database insertion happens after Top 5 capping)
           const newSignal = new Signal({
             symbol,
             market,
@@ -319,11 +328,10 @@ export async function POST(request: Request) {
             updatedAt: createdAt,
           });
 
-          await newSignal.save();
-          console.log(`[AI SUCCESS] Generated signal for ${symbol} in timeframe: ${finalTimeframe}`);
+          console.log(`[AI SUCCESS] Evaluated candidate signal for ${symbol} in timeframe: ${finalTimeframe}`);
 
           generatedSignals.push(newSignal);
-          resultsSummary.push(`${symbol}: تم التحديث بنجاح كـ (${finalTimeframe})`);
+          resultsSummary.push(`${symbol}: تم تحليله بنجاح كمرشح (${finalTimeframe})`);
           successCount++;
 
           await delay(1000);
@@ -345,9 +353,18 @@ export async function POST(request: Request) {
       }
     }
 
-    // Cap output to Top 5 signals sorted by total score
+    // --- STRICT STEP 2, 3 & 4: Sort by Strength, Hard Cap (Top 5 Only) & Database Insert ---
     generatedSignals.sort((a, b) => (b.scoreMetrics?.totalScore || 0) - (a.scoreMetrics?.totalScore || 0));
     const top5Signals = generatedSignals.slice(0, 5);
+
+    for (const signalToSave of top5Signals) {
+      await Signal.updateMany(
+        { symbol: signalToSave.symbol, timeframe: signalToSave.timeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
+        { $set: { status: 'EXPIRED' } }
+      );
+      await signalToSave.save();
+      console.log(`[DATABASE INSERT] Saved capped signal for ${signalToSave.symbol}`);
+    }
 
     return NextResponse.json({
       success: true,
