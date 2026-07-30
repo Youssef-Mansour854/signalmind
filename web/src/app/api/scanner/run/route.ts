@@ -14,13 +14,14 @@ export const revalidate = 0;
 
 function getExpirationDate(timeframe: string, createdAt: Date): Date {
   const date = new Date(createdAt.getTime());
-  if (timeframe === 'يومي' || timeframe === 'DAY') {
+  const tfUpper = (timeframe || '').toUpperCase();
+  if (timeframe === 'يومي' || tfUpper === 'DAY' || tfUpper === 'DAY_TRADE') {
     date.setHours(date.getHours() + 24);
-  } else if (timeframe === 'أسبوعي' || timeframe === 'WEEK') {
+  } else if (timeframe === 'أسبوعي' || tfUpper === 'WEEK' || tfUpper === 'SWING') {
     date.setDate(date.getDate() + 7);
-  } else if (timeframe === 'شهري' || timeframe === 'MONTH') {
+  } else if (timeframe === 'شهري' || tfUpper === 'MONTH' || tfUpper === 'MONTHLY') {
     date.setDate(date.getDate() + 30);
-  } else if (timeframe === 'استثمار سنوي' || timeframe === 'YEAR') {
+  } else if (timeframe === 'استثمار سنوي' || tfUpper === 'YEAR' || tfUpper === 'YEARLY') {
     date.setDate(date.getDate() + 365);
   } else {
     date.setHours(date.getHours() + 24);
@@ -136,6 +137,21 @@ export async function POST(request: Request) {
 
     if (!reqTf) {
       reqTf = routine === 'MACRO_SCAN' ? 'SWING' : 'DAY_TRADE';
+    }
+
+    // Map the requested timeframe to the standard string expected by the DB/UI
+    let dbTimeframe = 'DAY_TRADE';
+    const upperReqTf = (reqTf || '').toUpperCase();
+    if (upperReqTf === 'SWING' || upperReqTf === 'WEEK' || reqTf === 'أسبوعي') {
+      dbTimeframe = 'SWING';
+    } else if (upperReqTf === 'MONTHLY' || upperReqTf === 'MONTH' || reqTf === 'شهري') {
+      dbTimeframe = 'MONTHLY';
+    } else if (upperReqTf === 'YEARLY' || upperReqTf === 'YEAR' || reqTf === 'استثمار سنوي') {
+      dbTimeframe = 'YEARLY';
+    } else if (upperReqTf === 'DAY_TRADE' || upperReqTf === 'DAY' || reqTf === 'يومي') {
+      dbTimeframe = 'DAY_TRADE';
+    } else {
+      dbTimeframe = reqTf || 'DAY_TRADE';
     }
 
     const watchlist = routine === 'MACRO_SCAN' ? MACRO_WATCHLIST : OPENING_WATCHLIST;
@@ -299,18 +315,8 @@ export async function POST(request: Request) {
 
           const parsed = JSON.parse(content);
 
-          // Normalize timeframe using reqTf if necessary
-          let finalTimeframe = parsed.timeframe;
-          if (!finalTimeframe || finalTimeframe === 'DAY' || finalTimeframe === 'day') {
-            if (reqTf === 'SWING') finalTimeframe = 'أسبوعي';
-            else if (reqTf === 'MONTHLY') finalTimeframe = 'شهري';
-            else if (reqTf === 'YEARLY') finalTimeframe = 'استثمار سنوي';
-            else finalTimeframe = 'يومي';
-          }
-          if (finalTimeframe === 'DAY_TRADE' || finalTimeframe === 'DAY' || finalTimeframe === 'day') finalTimeframe = 'يومي';
-          if (finalTimeframe === 'SWING' || finalTimeframe === 'WEEK' || finalTimeframe === 'week') finalTimeframe = 'أسبوعي';
-          if (finalTimeframe === 'MONTHLY' || finalTimeframe === 'MONTH' || finalTimeframe === 'month') finalTimeframe = 'شهري';
-          if (finalTimeframe === 'YEARLY' || finalTimeframe === 'YEAR' || finalTimeframe === 'year') finalTimeframe = 'استثمار سنوي';
+          // Force timeframe property to match the requested dbTimeframe
+          const finalTimeframe = dbTimeframe;
 
           const entry = Number(parsed.entryPrice) || latestPrice;
           const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
@@ -359,7 +365,7 @@ export async function POST(request: Request) {
             updatedAt: createdAt,
           });
 
-          console.log(`[AI SUCCESS] Evaluated candidate signal for ${symbol} in timeframe: ${finalTimeframe}`);
+          console.log(`[AI SUCCESS] Evaluated candidate signal for ${symbol} with forced timeframe: ${finalTimeframe}`);
 
           generatedSignals.push(newSignal);
           resultsSummary.push(`${symbol}: تم تحليله بنجاح كمرشح (${finalTimeframe})`);
@@ -391,13 +397,20 @@ export async function POST(request: Request) {
     const remainingCap = Math.max(0, 5 - todaySignalsCount);
     const topSignalsToInsert = generatedSignals.slice(0, remainingCap);
 
-    for (const signalToSave of topSignalsToInsert) {
+    // Overwrite the timeframe before DB insert
+    const finalSignalsToInsert = topSignalsToInsert.map((signal) => {
+      signal.timeframe = dbTimeframe;
+      signal.expiresAt = getExpirationDate(dbTimeframe, signal.createdAt || new Date());
+      return signal;
+    });
+
+    for (const signalToSave of finalSignalsToInsert) {
       await Signal.updateMany(
         { symbol: signalToSave.symbol, timeframe: signalToSave.timeframe, status: { $in: ['ACTIVE', 'Active', 'Pending'] } },
         { $set: { status: 'EXPIRED' } }
       );
       await signalToSave.save();
-      console.log(`[DATABASE INSERT] Saved capped signal for ${signalToSave.symbol}`);
+      console.log(`[DATABASE INSERT] Saved capped signal for ${signalToSave.symbol} with timeframe ${signalToSave.timeframe}`);
     }
 
     const scanTypeStr = isMacro ? 'الفرص الكبرى' : 'رادار الافتتاح';
