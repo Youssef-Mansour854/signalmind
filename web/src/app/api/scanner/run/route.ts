@@ -70,6 +70,16 @@ function isNYMarketOpenTime(date: Date = new Date()): boolean {
   return hour === 9 && minute >= 30 && minute <= 35;
 }
 
+async function processInBatches<T, R>(items: T[], batchSize: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -161,68 +171,52 @@ export async function POST(request: Request) {
     let successCount = 0;
     const generatedSignals: any[] = [];
 
-    // Helper chunker for watchlist
-    const CHUNK_SIZE = 5;
-    const CHUNK_DELAY_MS = 2000;
-    const chunkArray = <T>(arr: T[], size: number): T[][] =>
-      arr.length ? [arr.slice(0, size), ...chunkArray(arr.slice(size), size)] : [];
+    const processSingleItem = async (item: { symbol: string; market: string }) => {
+      const { symbol, market } = item;
+      try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
 
-    const watchlistChunks = chunkArray(watchlist, CHUNK_SIZE);
+        // --- STRICT STEP 1: Deduplication Check (Prevent Spam) ---
+        const existingSignalToday = await Signal.findOne({
+          symbol,
+          status: { $in: ['ACTIVE', 'Active', 'Pending'] },
+          createdAt: { $gte: startOfToday }
+        });
 
-    for (let cIdx = 0; cIdx < watchlistChunks.length; cIdx++) {
-      const chunk = watchlistChunks[cIdx];
-      console.log(`[SCANNER CHUNK] Processing batch ${cIdx + 1}/${watchlistChunks.length} (${chunk.length} items)...`);
+        if (existingSignalToday) {
+          console.log(`[Deduplication] Skipped ${symbol}: Active/Pending signal already created today`);
+          return { summary: `${symbol}: تم التخطي لوجود إشارة نشطة منشأة اليوم (Deduplication Guard)`, signal: null };
+        }
 
-      for (const item of chunk) {
-        const { symbol, market } = item;
-        try {
-          const startOfToday = new Date();
-          startOfToday.setHours(0, 0, 0, 0);
+        // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
+        const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
+        const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
 
-          // --- STRICT STEP 1: Deduplication Check (Prevent Spam) ---
-          const existingSignalToday = await Signal.findOne({
-            symbol,
-            status: { $in: ['ACTIVE', 'Active', 'Pending'] },
-            createdAt: { $gte: startOfToday }
-          });
+        // --- STRICT FILTER 1: Minimum Average Daily Volume (1,000,000) ---
+        const MIN_VOLUME = 1000000;
+        const volumeAvg = (marketData as any).volumeAvg || (marketData as any).volume || 0;
+        if (volumeAvg > 0 && volumeAvg < MIN_VOLUME) {
+          console.log(`[Noise Filter] Skipped ${symbol}: Average volume (${volumeAvg}) < ${MIN_VOLUME}`);
+          return { summary: `${symbol}: تم التخطي بسبب ضعف السيولة اليومية (< 1,000,000)`, signal: null };
+        }
 
-          if (existingSignalToday) {
-            console.log(`[Deduplication] Skipped ${symbol}: Active/Pending signal already created today`);
-            resultsSummary.push(`${symbol}: تم التخطي لوجود إشارة نشطة منشأة اليوم (Deduplication Guard)`);
-            continue;
-          }
+        // --- STRICT FILTER 2: RSI Safe Range (40 - 70) ---
+        if (latestRSI < 40 || latestRSI > 70) {
+          console.log(`[RSI Filter] Skipped ${symbol}: RSI (${latestRSI.toFixed(1)}) outside 40-70 safe range`);
+          return { summary: `${symbol}: تم التخطي لخروج مؤشر RSI عن النطاق الآمن (40-70)`, signal: null };
+        }
 
-          // Fetch market data using marketFetcher utility (with Staleness Guard and Market Router)
-          const marketData = await fetchMarketData(symbol, market as 'US' | 'EGX', isMacro);
-          const { latestPrice, latestRSI, latestMACD, latestEMA50, latestEMA200 } = marketData;
+        // --- STRICT FILTER 3: Trend Confirmation (Price >= EMA50) ---
+        if (latestEMA50 > 0 && latestPrice < latestEMA50) {
+          console.log(`[Trend Filter] Skipped ${symbol}: Price (${latestPrice}) below EMA50 (${latestEMA50})`);
+          return { summary: `${symbol}: تم التخطي بسبب معاكسة الاتجاه (السعر أقل من EMA50)`, signal: null };
+        }
 
-          // --- STRICT FILTER 1: Minimum Average Daily Volume (1,000,000) ---
-          const MIN_VOLUME = 1000000;
-          const volumeAvg = (marketData as any).volumeAvg || (marketData as any).volume || 0;
-          if (volumeAvg > 0 && volumeAvg < MIN_VOLUME) {
-            console.log(`[Noise Filter] Skipped ${symbol}: Average volume (${volumeAvg}) < ${MIN_VOLUME}`);
-            resultsSummary.push(`${symbol}: تم التخطي بسبب ضعف السيولة اليومية (< 1,000,000)`);
-            continue;
-          }
-
-          // --- STRICT FILTER 2: RSI Safe Range (40 - 70) ---
-          if (latestRSI < 40 || latestRSI > 70) {
-            console.log(`[RSI Filter] Skipped ${symbol}: RSI (${latestRSI.toFixed(1)}) outside 40-70 safe range`);
-            resultsSummary.push(`${symbol}: تم التخطي لخروج مؤشر RSI عن النطاق الآمن (40-70)`);
-            continue;
-          }
-
-          // --- STRICT FILTER 3: Trend Confirmation (Price >= EMA50) ---
-          if (latestEMA50 > 0 && latestPrice < latestEMA50) {
-            console.log(`[Trend Filter] Skipped ${symbol}: Price (${latestPrice}) below EMA50 (${latestEMA50})`);
-            resultsSummary.push(`${symbol}: تم التخطي بسبب معاكسة الاتجاه (السعر أقل من EMA50)`);
-            continue;
-          }
-
-          // 3. Setup prompt based on routine
-          let prompt = '';
-          if (isMacro) {
-            prompt = `أنت خبير استراتيجيات الاستثمار الكلي والتحليل الفني الهيكلي للمدى البعيد.
+        // 3. Setup prompt based on routine
+        let prompt = '';
+        if (isMacro) {
+          prompt = `أنت خبير استراتيجيات الاستثمار الكلي والتحليل الفني الهيكلي للمدى البعيد.
 قم بتحليل الاتجاه الهيكلي لسهم/صندوق ${symbol} (سوق: ${market}) بناءً على البيانات الفنية التاريخية (لمدة سنة كاملة):
 - السعر الحالي: ${latestPrice.toFixed(2)}
 - مؤشر RSI (14): ${latestRSI.toFixed(2)}
@@ -249,8 +243,8 @@ export async function POST(request: Request) {
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني هيكلي استثماري دقيق باللغة العربية يشرح سبب اتخاذ هذا القرار والتوجه الكلي للرمز بناء على EMA 50/200 والمؤشرات المذكورة."
 }`;
-          } else {
-            prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
+        } else {
+          prompt = `أنت خبير في التحليل الفني لأسواق المال ومستشار تداول خوارزمي.
 قم بتحليل البيانات الفنية الحالية لسهم ${symbol} (سوق: ${market}) واكتب توصية تداول دقيقة باللغة العربية بناءً على المعطيات التالية:
 - السعر الحالي: ${latestPrice.toFixed(2)}
 - مؤشر القوة النسبية RSI (14): ${latestRSI.toFixed(2)}
@@ -278,115 +272,109 @@ export async function POST(request: Request) {
   "signalStrength": "قوية" | "متوسطة",
   "explanationArabic": "تحليل فني مختصر ومقنع باللغة العربية يشرح سبب اتخاذ هذا القرار الفني بالاعتماد على المؤشرات المذكورة (RSI, MACD) ومستويات الدعم والمقاومة، وسبب اختيار هذا الإطار الزمني بالذات."
 }`;
-          }
+        }
 
-          // 4. Query AI using rotated keys
-          let content = '';
-          let lastError: any = null;
+        // 4. Query AI using rotated keys
+        let content = '';
 
-          for (let i = 0; i < apiKeys.length; i++) {
-            const currentKey = apiKeys[i];
-            try {
-              const groq = new Groq({ apiKey: currentKey });
-              const chatCompletion = await groq.chat.completions.create({
-                messages: [
-                  { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
-                  { role: 'user', content: prompt },
-                ],
-                model: 'llama-3.3-70b-versatile',
-                response_format: { type: 'json_object' },
-              });
+        for (let i = 0; i < apiKeys.length; i++) {
+          const currentKey = apiKeys[i];
+          try {
+            const groq = new Groq({ apiKey: currentKey });
+            const chatCompletion = await groq.chat.completions.create({
+              messages: [
+                { role: 'system', content: 'You must output strictly JSON format. Do not enclose output in markdown blocks like ```json ... ```. Just return the raw JSON string.' },
+                { role: 'user', content: prompt },
+              ],
+              model: 'llama-3.3-70b-versatile',
+              response_format: { type: 'json_object' },
+            });
 
-              const resContent = chatCompletion.choices[0]?.message?.content;
-              if (resContent) {
-                content = resContent;
-                break;
-              }
-            } catch (err: any) {
-              console.warn(`[WARNING] Groq key at index ${i} failed for bulk scan of ${symbol}: ${err.message}`);
-              lastError = err;
+            const resContent = chatCompletion.choices[0]?.message?.content;
+            if (resContent) {
+              content = resContent;
+              break;
             }
-          }
-
-          if (!content) {
-            resultsSummary.push(`${symbol}: فشل الاتصال بالذكاء الاصطناعي`);
-            continue;
-          }
-
-          const parsed = JSON.parse(content);
-
-          // Force timeframe property to match the requested dbTimeframe
-          const finalTimeframe = dbTimeframe;
-
-          const entry = Number(parsed.entryPrice) || latestPrice;
-          const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
-          const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
-          const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
-
-          const signalType = parsed.signalType || 'BUY';
-          const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
-          const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
-          const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
-
-          const createdAt = new Date();
-          const expiresAt = getExpirationDate(finalTimeframe, createdAt);
-
-          // 5. Construct Signal document in-memory (database insertion happens after Top 5 capping)
-          const newSignal = new Signal({
-            symbol,
-            market,
-            signalType,
-            entryPrice: entry,
-            actualEntryPrice,
-            stopLoss: sl,
-            takeProfit: tp,
-            currentPrice: latestPrice,
-            status: initialStatus,
-            expiresAt,
-            aiConfidence: parsed.aiConfidence || 'Medium',
-            aiRisk: parsed.aiRisk || 'Medium',
-            timeframe: finalTimeframe,
-            signalStrength: parsed.signalStrength || 'متوسطة',
-            explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
-            indicators: {
-              close: latestPrice,
-              rsi: latestRSI,
-              macdLine: latestMACD.MACD || 0,
-              macdSignal: latestMACD.signal || 0,
-            },
-            scoreMetrics: {
-              riskRewardRatio: Number(rrr.toFixed(2)),
-              confluenceScore: 75,
-              aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
-              totalScore: 75,
-              rank: 999,
-            },
-            createdAt,
-            updatedAt: createdAt,
-          });
-
-          console.log(`[AI SUCCESS] Evaluated candidate signal for ${symbol} with forced timeframe: ${finalTimeframe}`);
-
-          generatedSignals.push(newSignal);
-          resultsSummary.push(`${symbol}: تم تحليله بنجاح كمرشح (${finalTimeframe})`);
-          successCount++;
-
-          await delay(1000);
-
-        } catch (err: any) {
-          if (err instanceof StaleDataError) {
-            console.warn(`[Guard REJECT] Skipped ${symbol} due to stale data: ${err.message}`);
-            resultsSummary.push(`${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`);
-          } else {
-            console.error(`Error scanning ${symbol}:`, err);
-            resultsSummary.push(`${symbol}: خطأ (${err.message})`);
+          } catch (err: any) {
+            console.warn(`[WARNING] Groq key at index ${i} failed for bulk scan of ${symbol}: ${err.message}`);
           }
         }
-      }
 
-      if (cIdx < watchlistChunks.length - 1) {
-        console.log(`[RATE LIMIT GUARD] Pausing ${CHUNK_DELAY_MS}ms between chunks...`);
-        await delay(CHUNK_DELAY_MS);
+        if (!content) {
+          return { summary: `${symbol}: فشل الاتصال بالذكاء الاصطناعي`, signal: null };
+        }
+
+        const parsed = JSON.parse(content);
+        const finalTimeframe = dbTimeframe;
+
+        const entry = Number(parsed.entryPrice) || latestPrice;
+        const sl = Number(parsed.stopLoss) || latestPrice * 0.95;
+        const tp = Number(parsed.takeProfit) || latestPrice * 1.1;
+        const rrr = Math.abs(tp - entry) / Math.max(0.01, Math.abs(entry - sl));
+
+        const signalType = parsed.signalType || 'BUY';
+        const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
+        const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+        const actualEntryPrice = entryCheck.actualEntryPrice;
+
+        const createdAt = new Date();
+        const expiresAt = getExpirationDate(finalTimeframe, createdAt);
+
+        const newSignal = new Signal({
+          symbol,
+          market,
+          signalType,
+          entryPrice: entry,
+          actualEntryPrice,
+          stopLoss: sl,
+          takeProfit: tp,
+          currentPrice: latestPrice,
+          status: initialStatus,
+          expiresAt,
+          aiConfidence: parsed.aiConfidence || 'Medium',
+          aiRisk: parsed.aiRisk || 'Medium',
+          timeframe: finalTimeframe,
+          signalStrength: parsed.signalStrength || 'متوسطة',
+          explanationArabic: parsed.explanationArabic || 'تم تحديث المسح الفني التلقائي.',
+          indicators: {
+            close: latestPrice,
+            rsi: latestRSI,
+            macdLine: latestMACD.MACD || 0,
+            macdSignal: latestMACD.signal || 0,
+          },
+          scoreMetrics: {
+            riskRewardRatio: Number(rrr.toFixed(2)),
+            confluenceScore: 75,
+            aiConfidenceScore: parsed.aiConfidence === 'High' ? 90 : parsed.aiConfidence === 'Medium' ? 70 : 50,
+            totalScore: 75,
+            rank: 999,
+          },
+          createdAt,
+          updatedAt: createdAt,
+        });
+
+        console.log(`[AI SUCCESS] Evaluated candidate signal for ${symbol} with forced timeframe: ${finalTimeframe}`);
+        return { summary: `${symbol}: تم تحليله بنجاح كمرشح (${finalTimeframe})`, signal: newSignal };
+
+      } catch (err: any) {
+        if (err instanceof StaleDataError) {
+          console.warn(`[Guard REJECT] Skipped ${symbol} due to stale data: ${err.message}`);
+          return { summary: `${symbol}: تم التخطي بسبب قدم البيانات (Stale Data Guard)`, signal: null };
+        } else {
+          console.error(`Error scanning ${symbol}:`, err);
+          return { summary: `${symbol}: خطأ (${err.message})`, signal: null };
+        }
+      }
+    };
+
+    // Parallel batch processing (batches of 10 items concurrently)
+    const BATCH_SIZE = 10;
+    const batchResults = await processInBatches(watchlist, BATCH_SIZE, processSingleItem);
+    for (const itemResult of batchResults) {
+      if (itemResult.summary) resultsSummary.push(itemResult.summary);
+      if (itemResult.signal) {
+        generatedSignals.push(itemResult.signal);
+        successCount++;
       }
     }
 
