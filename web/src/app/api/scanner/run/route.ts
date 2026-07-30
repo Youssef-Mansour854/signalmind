@@ -8,6 +8,7 @@ import Signal from '@/models/Signal';
 import '@/models/Signal'; // Registry safety
 import { fetchMarketData, StaleDataError } from '@/utils/marketFetcher';
 import { checkEntryTrigger, evaluateExecutionTrigger } from '@/lib/executionEngine';
+import { sendTelegramSignalAlert } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -400,6 +401,9 @@ export async function POST(request: Request) {
       await signalToSave.save();
       console.log(`[DATABASE INSERT] Saved capped signal for ${signalToSave.symbol} with timeframe ${signalToSave.timeframe}`);
     }
+
+    // Trigger Telegram notification alert
+    await sendTelegramSignalAlert(finalSignalsToInsert, dbTimeframe);
 
     const scanTypeStr = isMacro ? 'الفرص الكبرى' : 'رادار الافتتاح';
     const responseMsg = `اكتمل مسح ${scanTypeStr} بنجاح. تم اختيـار ${topSignalsToInsert.length} إشارات جديدة.`;
