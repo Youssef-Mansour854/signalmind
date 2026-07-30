@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     // 1. Auto-expiration logic: mark any signals that have expired as 'EXPIRED'
     await Signal.updateMany(
-      { status: { $in: ['ACTIVE', 'Active', 'Pending'] }, expiresAt: { $lt: new Date() } },
+      { status: { $regex: '^(active|pending)$', $options: 'i' }, expiresAt: { $lt: new Date() } },
       { $set: { status: 'EXPIRED' } }
     );
 
@@ -32,24 +32,24 @@ export async function GET(request: Request) {
     // 2. Status check: support 'all', specific statuses, or default to active
     if (status === 'all' || status === 'All' || status === 'ALL') {
       // Do not filter by query.status so all statuses are returned
-    } else if (status === 'Closed' || status === 'Win' || status === 'Loss' || status === 'Expired' || status === 'EXPIRED' || status === 'EXECUTED' || status === 'SUCCESS' || status === 'FAILED') {
-      if (status === 'Closed') {
-        query.status = { $in: ['EXPIRED', 'EXECUTED', 'Hit TP', 'Hit SL', 'Expired', 'SUCCESS', 'FAILED'] };
-      } else if (status === 'Win') {
-        query.status = { $in: ['EXECUTED', 'Hit TP', 'SUCCESS'] };
-      } else if (status === 'Loss') {
-        query.status = { $in: ['EXECUTED', 'Hit SL', 'FAILED'] };
+    } else if (status === 'Closed' || status === 'CLOSED' || status === 'Win' || status === 'WIN' || status === 'Loss' || status === 'LOSS' || status === 'Expired' || status === 'EXPIRED' || status === 'EXECUTED' || status === 'SUCCESS' || status === 'FAILED') {
+      if (status === 'Closed' || status === 'CLOSED') {
+        query.status = { $in: ['EXPIRED', 'Expired', 'EXECUTED', 'HIT_TP', 'Hit TP', 'HIT_SL', 'Hit SL', 'CLOSED', 'Closed', 'INVALIDATED'] };
+      } else if (status === 'Win' || status === 'WIN') {
+        query.status = { $in: ['EXECUTED', 'HIT_TP', 'Hit TP', 'SUCCESS'] };
+      } else if (status === 'Loss' || status === 'LOSS') {
+        query.status = { $in: ['EXECUTED', 'HIT_SL', 'Hit SL', 'FAILED'] };
       } else if (status === 'Expired' || status === 'EXPIRED') {
         query.status = { $in: ['EXPIRED', 'Expired'] };
       } else {
-        query.status = status;
+        query.status = { $regex: `^${status}$`, $options: 'i' };
       }
     } else if (status === 'Active' || status === 'ACTIVE') {
-      query.status = { $in: ['ACTIVE', 'Active', 'Pending'] };
+      query.status = { $in: ['ACTIVE', 'Active', 'PENDING', 'Pending'] };
     } else if (status) {
-      query.status = status;
+      query.status = { $regex: `^${status}$`, $options: 'i' };
     } else {
-      query.status = { $in: ['ACTIVE', 'Active', 'Pending'] };
+      query.status = { $in: ['ACTIVE', 'Active', 'PENDING', 'Pending'] };
     }
 
     // Retrieve signals sorted by rank (ascending) and date (descending)

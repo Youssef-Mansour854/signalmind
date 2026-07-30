@@ -86,8 +86,8 @@ class SignalPriceUpdater:
         signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
-        # Query signals with status 'Pending' or 'Active'
-        query = {"status": {"$in": ["Pending", "Active", "pending", "active"]}}
+        # Query signals with status 'PENDING' or 'ACTIVE' (case-insensitive regex fallback)
+        query = {"status": {"$regex": "^(active|pending)$", "$options": "i"}}
         active_signals = await asyncio.to_thread(list, signals_col.find(query).sort("createdAt", -1))
 
         if not active_signals:
@@ -118,7 +118,7 @@ class SignalPriceUpdater:
 
         for sig in active_signals:
             symbol = sig["symbol"]
-            status = sig["status"]
+            status = str(sig.get("status", "")).upper()
             entry_price = sig.get("entryPrice", 0)
             take_profit = sig.get("takeProfit", 0)
             stop_loss = sig.get("stopLoss") or sig.get("stop_loss") or 0
@@ -183,27 +183,27 @@ class SignalPriceUpdater:
             ENTRY_TOLERANCE_PCT = 0.003  # 0.3% buffer
             signal_type = sig.get("signalType", "BUY")
 
-            # Entry Tolerance logic (Pending -> Active)
-            if status == "Pending":
+            # Entry Tolerance logic (PENDING -> ACTIVE)
+            if status == "PENDING":
                 if signal_type == "BUY":
                     acceptable_entry_max = entry_price * (1 + ENTRY_TOLERANCE_PCT)
                     if current_price <= acceptable_entry_max:
-                        new_status = "Active"
-                        update_fields["status"] = "Active"
+                        new_status = "ACTIVE"
+                        update_fields["status"] = "ACTIVE"
                         update_fields["activatedAt"] = now
-                        update_fields["actualEntryPrice"] = round(current_price, 4)  # Save real execution price, NOT original signalEntryPrice
+                        update_fields["actualEntryPrice"] = round(current_price, 4)
                         print(f"[ACTIVATED BUY] Signal {symbol} activated at live price {current_price:.4f} <= max entry threshold {acceptable_entry_max:.4f}")
                 elif signal_type == "SELL":
                     acceptable_entry_min = entry_price * (1 - ENTRY_TOLERANCE_PCT)
                     if current_price >= acceptable_entry_min:
-                        new_status = "Active"
-                        update_fields["status"] = "Active"
+                        new_status = "ACTIVE"
+                        update_fields["status"] = "ACTIVE"
                         update_fields["activatedAt"] = now
-                        update_fields["actualEntryPrice"] = round(current_price, 4)  # Save real execution price
+                        update_fields["actualEntryPrice"] = round(current_price, 4)
                         print(f"[ACTIVATED SELL] Signal {symbol} activated at live price {current_price:.4f} >= min entry threshold {acceptable_entry_min:.4f}")
 
-            # Logic for target hits (Active/Pending -> Hit TP/SL)
-            if new_status in ("Active", "Pending"):
+            # Logic for target hits (ACTIVE/PENDING -> HIT_TP/HIT_SL)
+            if new_status in ("ACTIVE", "PENDING"):
                 # Break-even Defense Mechanism (+2% profit threshold)
                 if entry_price > 0:
                     profit_pct = (current_price - entry_price) / entry_price
@@ -232,7 +232,7 @@ class SignalPriceUpdater:
 
                 if hit_tp:
                     exit_val = float(take_profit)
-                    update_fields["status"] = "Hit TP"
+                    update_fields["status"] = "HIT_TP"
                     update_fields["currentPrice"] = round(exit_val, 4)
                     update_fields["closedAt"] = now
                     if entry_price > 0:
@@ -242,7 +242,7 @@ class SignalPriceUpdater:
                 elif hit_sl:
                     exit_val = float(stop_loss)
                     is_profitable = bool(entry_price > 0 and exit_val > entry_price)
-                    update_fields["status"] = "Hit TP" if is_profitable else "Hit SL"
+                    update_fields["status"] = "HIT_TP" if is_profitable else "HIT_SL"
                     update_fields["currentPrice"] = round(exit_val, 4)
                     update_fields["closedAt"] = now
                     if entry_price > 0:

@@ -64,8 +64,8 @@ class AsyncTradeTracker:
         signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
-        # Query open positions where status is 'ACTIVE'
-        query = {"status": "ACTIVE"}
+        # Query open positions where status is 'ACTIVE' (case-insensitive regex fallback)
+        query = {"status": {"$regex": "^active$", "$options": "i"}}
         active_trades = await asyncio.to_thread(list, portfolio_col.find(query))
 
         if not active_trades:
@@ -94,7 +94,7 @@ class AsyncTradeTracker:
         closed_losses = 0
 
         for trade in active_trades:
-            if trade.get("status") == "CLOSED":
+            if str(trade.get("status", "")).upper() == "CLOSED":
                 continue
             symbol = trade["symbol"]
             
@@ -115,7 +115,7 @@ class AsyncTradeTracker:
                     signals_col.find_one,
                     {
                         "symbol": symbol,
-                        "status": {"$in": ["Active", "ACTIVE", "Pending", "pending"]}
+                        "status": {"$regex": "^(active|pending)$", "$options": "i"}
                     },
                     sort=[("createdAt", -1)]
                 )
@@ -181,7 +181,7 @@ class AsyncTradeTracker:
 
             if hit_tp:
                 exit_val = float(take_profit)
-                update_fields["status"] = "Hit TP"
+                update_fields["status"] = "HIT_TP"
                 update_fields["exitPrice"] = round(exit_val, 4)
                 update_fields["exit_price"] = round(exit_val, 4)
                 update_fields["closeDate"] = now
@@ -199,7 +199,7 @@ class AsyncTradeTracker:
             elif hit_sl:
                 exit_val = float(stop_loss)
                 is_profitable = bool(entry_price and exit_val > entry_price)
-                update_fields["status"] = "Hit TP" if is_profitable else "Hit SL"
+                update_fields["status"] = "HIT_TP" if is_profitable else "HIT_SL"
                 update_fields["exitPrice"] = round(exit_val, 4)
                 update_fields["exit_price"] = round(exit_val, 4)
                 update_fields["closeDate"] = now
@@ -243,8 +243,9 @@ class AsyncTradeTracker:
 
         portfolio_col = database["user_portfolio"]
         closed_query = {
-            "status": {"$in": ["Hit TP", "Hit SL", "EXPIRED", "EXECUTED", "SUCCESS", "FAILED", "CLOSED", "Closed", "Expired"]}
+            "status": {"$regex": "^(hit_tp|hit_sl|expired|executed|success|failed|closed)$", "$options": "i"}
         }
+        closed_trades = list(portfolio_col.find(closed_query))
         closed_trades = list(portfolio_col.find(closed_query))
 
         if not closed_trades:

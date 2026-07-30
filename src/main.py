@@ -143,7 +143,7 @@ async def main_async():
                         signals_col.find_one,
                         {
                             "symbol": symbol,
-                            "status": {"$in": ["Active", "ACTIVE", "Pending", "pending", "active"]}
+                            "status": {"$regex": "^(active|pending)$", "$options": "i"}
                         }
                     )
                     if existing_signal:
@@ -334,16 +334,16 @@ async def main_async():
                 # Entry Tolerance (0.3% buffer)
                 ENTRY_TOLERANCE_PCT = 0.003
                 actual_entry_price = close_price
-                status = "Pending"
+                status = "PENDING"
 
                 if signal_type == "BUY":
                     acceptable_entry_max = entry_price * (1 + ENTRY_TOLERANCE_PCT)
                     if close_price <= acceptable_entry_max:
-                        status = "Active"
+                        status = "ACTIVE"
                 elif signal_type == "SELL":
                     acceptable_entry_min = entry_price * (1 - ENTRY_TOLERANCE_PCT)
                     if close_price >= acceptable_entry_min:
-                        status = "Active"
+                        status = "ACTIVE"
 
                 signal_doc = {
                     "symbol": symbol,
@@ -369,7 +369,7 @@ async def main_async():
                     "updatedAt": now
                 }
 
-                if status == "Active":
+                if status == "ACTIVE":
                     signal_doc["activatedAt"] = now
 
                 if signal_type == 'BUY':
