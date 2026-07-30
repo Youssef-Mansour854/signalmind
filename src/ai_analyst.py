@@ -113,6 +113,9 @@ class GroqAnalyst:
         prompt = f"""
         Analyze the following technical indicators for the stock {symbol}:
         Current Price: {stock_data['close']}
+        Calculated Entry Price: {stock_data.get('entry_price')}
+        Calculated Stop Loss: {stock_data.get('stop_loss')}
+        Calculated Take Profit: {stock_data.get('take_profit')}
         RSI (14): {stock_data['rsi']}
         MACD Line: {stock_data['macd_line']}
         MACD Signal: {stock_data['macd_signal']}
@@ -136,15 +139,8 @@ class GroqAnalyst:
         
         Be balanced and realistic — expect roughly 20-40% of stocks to be BUY on any given day.
 
-        ENTRY PRICE RULES:
-        Do NOT set entry_price equal to the current price
-        Set entry_price 1% to 2% BELOW the current closing price
-        This simulates a limit order entry on a minor pullback
-        Formula: entry_price = close_price * (1 - random between 0.01 and 0.02)
-        Example: if current price = $100, set entry between $98.00 and $99.00
-        stop_loss should be 3% to 5% below entry_price
-        take_profit should give minimum 1.5x Risk-Reward Ratio
-        Formula: take_profit = entry + (entry - stop_loss) * 1.5
+        IMPORTANT:
+        The entry_price ({stock_data.get('entry_price')}), stop_loss ({stock_data.get('stop_loss')}), and take_profit ({stock_data.get('take_profit')}) have been calculated mathematically by quantitative models. DO NOT recalculate or modify these numbers. Output them exactly as given.
 
         TIMEFRAME RULES:
         Classify the trade setup timeframe as ONE of the following based on the chart's technical nature:
@@ -162,20 +158,38 @@ class GroqAnalyst:
 
         {{
             "signal": "BUY" | "SELL" | "HOLD",
-            "entry_price": number,
-            "take_profit": number,
-            "stop_loss": number,
-            "reasoning_ar": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة",
+            "entry_price": {stock_data.get('entry_price')},
+            "take_profit": {stock_data.get('take_profit')},
+            "stop_loss": {stock_data.get('stop_loss')},
+            "reasoning_ar": "شرح مختصر من 3-4 أسطر بالعربي يوضح الصورة التقنية وسبب الإشارة المنطقية بناءً على الأرقام المعطاة",
             "timeframe": "يومي" | "أسبوعي" | "شهري" | "استثمار سنوي",
             "signal_strength": "قوية" | "متوسطة"
         }}
         """
         return prompt
 
-    async def analyze(self, stock_data: Dict[str, Any], session) -> Dict[str, Any]:
-        """Calls Groq API to analyze the data asynchronously with automatic API key rotation."""
-        prompt = self.generate_prompt(stock_data)
-        
+    def _safe_parse_json(self, response_text: str) -> Any:
+        """Unified helper to safely parse JSON object or array response with regex fallback."""
+        if not response_text:
+            return None
+        try:
+            return json.loads(response_text)
+        except (json.JSONDecodeError, Exception):
+            import re
+            json_match = re.search(r'(\[.*\]|\{.*\})', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    return json.loads(json_match.group(0))
+                except (json.JSONDecodeError, Exception) as parse_err:
+                    print(f"[ERROR] Failed regex JSON parse: {parse_err}")
+                    return None
+            return None
+
+    async def _call_groq(self, system_prompt: str, user_prompt: str, model_name: str, session) -> Any:
+        """
+        Unified Groq API call with round-robin key rotation and instant key switching on 429.
+        If all keys are exhausted in a cycle, applies exponential backoff sleep.
+        """
         num_keys = len(self.api_keys) if self.api_keys else 1
         attempts = 0
 
@@ -186,68 +200,172 @@ class GroqAnalyst:
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": getattr(self.config, "GROQ_MODEL", "llama-3.3-70b-versatile") if self.config else "llama-3.3-70b-versatile",
+                "model": model_name,
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert AI stock analyst. You provide objective technical analysis. You must always output ONLY valid JSON with no markdown."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
                 ],
-                "temperature": 0.3,
-                "max_tokens": 1000
+                "temperature": 0.2,
+                "max_tokens": 1500
             }
 
             try:
                 async with session.post(GROQ_API_URL, headers=headers, json=payload) as response:
                     if response.status == 429:
-                        raise Exception("429 Rate Limit")
-                        
+                        old_idx = GroqAnalyst.current_key_index % num_keys
+                        self.rotate_api_key()
+                        new_idx = GroqAnalyst.current_key_index % num_keys
+                        print(f"[INFO] Groq 429 hit on Key #{old_idx + 1}. Instantly rotated to Key #{new_idx + 1}. Retrying...")
+                        attempts += 1
+                        continue
+
                     response.raise_for_status()
-                    
                     response_json = await response.json()
                     response_text = response_json["choices"][0]["message"]["content"]
-                    response_text = response_text.replace("```json", "").replace("```", "").strip()
-
-                    analysis = json.loads(response_text)
-
-                    # Map reasoning_ar to explanation_arabic
-                    if "reasoning_ar" in analysis and "explanation_arabic" not in analysis:
-                        analysis["explanation_arabic"] = analysis["reasoning_ar"]
-
-                    # Map default fields if not returned by LLM
-                    if "confidence" not in analysis:
-                        analysis["confidence"] = "Medium"
-                    if "risk" not in analysis:
-                        analysis["risk"] = "Medium"
-                    if "timeframe" not in analysis:
-                        analysis["timeframe"] = "يومي"
-
-                    if "signal_strength" not in analysis:
-                        analysis["signal_strength"] = "متوسطة"
-                    else:
-                        strength_val = str(analysis["signal_strength"]).strip()
-                        if strength_val not in ["قوية", "متوسطة"]:
-                            if "قو" in strength_val:
-                                analysis["signal_strength"] = "قوية"
-                            else:
-                                analysis["signal_strength"] = "متوسطة"
-
-                    signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
-                    analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
-
-                    return analysis
+                    return self._safe_parse_json(response_text)
             except Exception as e:
                 if "429" in str(e):
+                    old_idx = GroqAnalyst.current_key_index % num_keys
+                    self.rotate_api_key()
+                    new_idx = GroqAnalyst.current_key_index % num_keys
+                    print(f"[INFO] Groq 429 hit on Key #{old_idx + 1}. Instantly rotated to Key #{new_idx + 1}. Retrying...")
                     attempts += 1
-                    if attempts < num_keys:
-                        self.rotate_api_key()
-                        continue
-                raise e
+                    continue
+                else:
+                    print(f"[ERROR] Groq API call failed ({model_name}): {e}")
+                    return None
 
-        print("[WARNING] All Groq API keys returned 429 sequentially. Applying fallback sleep...")
+        print("[WARNING] All Groq API keys returned 429. Applying backoff cooldown (5.0s)...")
         await asyncio.sleep(5.0)
-        raise Exception("429 Rate Limit - All API keys exhausted")
+        return None
+
+    async def quick_screen_batch(self, stocks_data: List[Dict[str, Any]], session) -> List[Dict[str, Any]]:
+        """
+        Stage 1 Batch Screener: Evaluates a batch of up to 10 stocks in a SINGLE Groq API call
+        using llama-3.1-8b-instant to stay far below RPM (Requests Per Minute) limits.
+        """
+        if not stocks_data:
+            return []
+
+        system_prompt = "You are a fast quantitative stock screener. Output ONLY valid JSON array with no markdown."
+        
+        stock_summaries = []
+        for s in stocks_data:
+            vol = s.get('volume', 0)
+            vol_avg = s.get('volume_avg', 1)
+            vol_ratio = round(vol / vol_avg, 2) if vol_avg > 0 else 1.0
+            stock_summaries.append({
+                "symbol": s['symbol'],
+                "close": s.get('close', 0),
+                "rsi": s.get('rsi', 50),
+                "macd": s.get('macd_line', 0),
+                "macd_signal": s.get('macd_signal', 0),
+                "vol_ratio": vol_ratio
+            })
+
+        user_prompt = f"""
+        Screen the following list of stocks in batch:
+        {json.dumps(stock_summaries, indent=2)}
+
+        Evaluate bullish setup quality for each stock from 1 to 10.
+        Set passed=true if RSI < 60 and (MACD > MACD_Signal or VolRatio >= 1.0).
+        Return exact JSON ARRAY:
+        [
+          {{"symbol": "TICKER", "score": number 1-10, "passed": true|false, "reason": "short English note"}},
+          ...
+        ]
+        """
+
+        model_name = getattr(self.config, "GROQ_FAST_MODEL", "llama-3.1-8b-instant")
+        result = await self._call_groq(system_prompt, user_prompt, model_name, session)
+
+        results_list = []
+        if isinstance(result, list):
+            results_list = result
+        elif isinstance(result, dict):
+            for k, v in result.items():
+                if isinstance(v, list):
+                    results_list = v
+                    break
+
+        eval_map = {}
+        for item in results_list:
+            if isinstance(item, dict) and 'symbol' in item:
+                eval_map[item['symbol']] = item
+
+        final_batch_results = []
+        for s in stocks_data:
+            sym = s['symbol']
+            eval_item = eval_map.get(sym)
+            if eval_item:
+                score = eval_item.get('score', 5)
+                try: score = int(score)
+                except (TypeError, ValueError): score = 5
+                passed = bool(eval_item.get('passed', False))
+                reason = str(eval_item.get('reason', 'Batch evaluated'))
+            else:
+                rsi = s.get('rsi', 50)
+                macd = s.get('macd_line', 0)
+                macds = s.get('macd_signal', 0)
+                passed = rsi < 60 and macd >= macds
+                score = 7 if passed else 4
+                reason = "Heuristic fallback"
+
+            final_batch_results.append({
+                "symbol": sym,
+                "score": score,
+                "passed": passed,
+                "reason": reason
+            })
+
+        return final_batch_results
+
+    async def analyze(self, stock_data: Dict[str, Any], session) -> Dict[str, Any]:
+        """
+        Stage 2: Deep technical analysis using llama-3.3-70b-versatile.
+        Calls Groq API for selected Top candidates only.
+        """
+        system_prompt = "You are an expert AI stock analyst. You provide objective technical analysis. You must always output ONLY valid JSON with no markdown."
+        user_prompt = self.generate_prompt(stock_data)
+        
+        model_name = getattr(self.config, "GROQ_MODEL", "llama-3.3-70b-versatile")
+        analysis = await self._call_groq(system_prompt, user_prompt, model_name, session)
+
+        if not analysis or not isinstance(analysis, dict):
+            print(f"[ERROR] Stage 2 deep analysis returned empty or invalid output for {stock_data.get('symbol')}.")
+            return None
+
+        # Strict 100% Python Override for Trading Levels
+        if 'entry_price' in stock_data:
+            analysis['entry_price'] = stock_data['entry_price']
+        if 'stop_loss' in stock_data:
+            analysis['stop_loss'] = stock_data['stop_loss']
+        if 'take_profit' in stock_data:
+            analysis['take_profit'] = stock_data['take_profit']
+
+        # Map reasoning_ar to explanation_arabic
+        if "reasoning_ar" in analysis and "explanation_arabic" not in analysis:
+            analysis["explanation_arabic"] = analysis["reasoning_ar"]
+
+        # Map default fields if not returned by LLM
+        if "confidence" not in analysis:
+            analysis["confidence"] = "Medium"
+        if "risk" not in analysis:
+            analysis["risk"] = "Medium"
+        if "timeframe" not in analysis:
+            analysis["timeframe"] = "يومي"
+
+        if "signal_strength" not in analysis:
+            analysis["signal_strength"] = "متوسطة"
+        else:
+            strength_val = str(analysis["signal_strength"]).strip()
+            if strength_val not in ["قوية", "متوسطة"]:
+                if "قو" in strength_val:
+                    analysis["signal_strength"] = "قوية"
+                else:
+                    analysis["signal_strength"] = "متوسطة"
+
+        signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
+        analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
+
+        return analysis

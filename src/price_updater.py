@@ -8,15 +8,56 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# MongoDB connection setup
+import time
+
+def connect_to_mongodb_with_retry(db_uri: str, max_retries: int = 3, initial_delay: float = 2.0):
+    """Connects to MongoDB with automatic retries and exponential backoff on DNS/network failure."""
+    delay = initial_delay
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = MongoClient(
+                db_uri,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000
+            )
+            client.admin.command('ping')
+            print(f"[SUCCESS] Connected to MongoDB (attempt {attempt}/{max_retries})")
+            return client
+        except Exception as e:
+            print(f"[WARNING] MongoDB connection attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(delay)
+                delay *= 2
+            else:
+                print(f"[ERROR] Failed to connect to MongoDB after {max_retries} attempts: {e}")
+                return None
+
+# Initial MongoDB connection setup
 db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
-try:
-    db_client = MongoClient(db_uri, serverSelectionTimeoutMS=3000)
-    db_client.admin.command('ping')
-    print("[SUCCESS] price_updater: Successfully connected to MongoDB")
-except Exception as e:
-    print(f"\n[ERROR] price_updater: MongoDB connection error! Details: {e}\n")
-    db_client = None
+db_client = connect_to_mongodb_with_retry(db_uri)
+
+import requests
+
+def fetch_alpha_vantage_quote(symbol: str):
+    """Fetches global quote from Alpha Vantage for a single symbol."""
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        return None
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            quote = data.get("Global Quote", {})
+            if quote and "05. price" in quote:
+                price = float(quote["05. price"])
+                high = float(quote.get("03. high", price))
+                low = float(quote.get("04. low", price))
+                return price, high, low
+    except Exception as e:
+        print(f"[ALPHA VANTAGE QUOTE ERROR] {symbol}: {e}")
+    return None
 
 class SignalPriceUpdater:
     def __init__(self, db_uri=None, db_name="signalmind"):
@@ -26,7 +67,9 @@ class SignalPriceUpdater:
     @property
     def db(self):
         if self._db_client is None:
-            self._db_client = MongoClient(self.db_uri)
+            self._db_client = connect_to_mongodb_with_retry(self.db_uri)
+        if self._db_client is None:
+            return None
         try:
             return self._db_client.get_default_database() or self._db_client["signalmind"]
         except Exception:
@@ -36,12 +79,16 @@ class SignalPriceUpdater:
         print(f"[INFO] Price Updater starting - fetching latest prices before analysis...")
         print(f"[INFO] This ensures analysis uses most recent available market data")
         print("Starting daily signal price updater...")
-        signals_col = self.db["signals"]
+        database = self.db
+        if database is None:
+            print("[ERROR] MongoDB connection unavailable in price_updater. Skipping price update.")
+            return
+        signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
         # Query signals with status 'Pending' or 'Active'
-        query = {"status": {"$in": ["Pending", "Active"]}}
-        active_signals = await asyncio.to_thread(list, signals_col.find(query))
+        query = {"status": {"$in": ["Pending", "Active", "pending", "active"]}}
+        active_signals = await asyncio.to_thread(list, signals_col.find(query).sort("createdAt", -1))
 
         if not active_signals:
             print("No pending or active signals to update.")
@@ -68,6 +115,7 @@ class SignalPriceUpdater:
         updated_count = 0
         tp_hits = 0
         sl_hits = 0
+
         for sig in active_signals:
             symbol = sig["symbol"]
             status = sig["status"]
@@ -80,31 +128,39 @@ class SignalPriceUpdater:
             high_price = None
             low_price = None
 
-            try:
-                if len(symbols) == 1:
-                    current_price = data["Close"].dropna().iloc[-1]
-                    high_price = data["High"].dropna().iloc[-1]
-                    low_price = data["Low"].dropna().iloc[-1]
-                else:
-                    current_price = data[symbol]["Close"].dropna().iloc[-1]
-                    high_price = data[symbol]["High"].dropna().iloc[-1]
-                    low_price = data[symbol]["Low"].dropna().iloc[-1]
-            except Exception as e:
-                # Fallback: try fetching this ticker individually
-                print(f"Batch fetch failed or empty for {symbol}, trying individual fetch...")
+            # 1. Primary: Try Alpha Vantage Global Quote
+            av_res = await asyncio.to_thread(fetch_alpha_vantage_quote, symbol)
+            if av_res is not None:
+                current_price, high_price, low_price = av_res
+                print(f"[PRIMARY - Alpha Vantage] Updated price for {symbol}: {current_price:.2f}")
+
+            # 2. Fallback: Extract from batch yfinance download or individual download
+            if current_price is None:
                 try:
-                    ticker_data = await asyncio.to_thread(
-                        yf.download,
-                        symbol,
-                        period="5d",
-                        progress=False
-                    )
-                    if not ticker_data.empty:
-                        current_price = ticker_data["Close"].dropna().iloc[-1]
-                        high_price = ticker_data["High"].dropna().iloc[-1]
-                        low_price = ticker_data["Low"].dropna().iloc[-1]
-                except Exception as inner_e:
-                    print(f"Failed to extract price data for signal {symbol} in fallback: {inner_e}")
+                    if len(symbols) == 1:
+                        current_price = data["Close"].dropna().iloc[-1]
+                        high_price = data["High"].dropna().iloc[-1]
+                        low_price = data["Low"].dropna().iloc[-1]
+                    else:
+                        current_price = data[symbol]["Close"].dropna().iloc[-1]
+                        high_price = data[symbol]["High"].dropna().iloc[-1]
+                        low_price = data[symbol]["Low"].dropna().iloc[-1]
+                except Exception as e:
+                    print(f"Batch fetch failed or empty for {symbol}, trying individual yfinance fallback with delay...")
+                    await asyncio.sleep(1.5)
+                    try:
+                        ticker_data = await asyncio.to_thread(
+                            yf.download,
+                            symbol,
+                            period="5d",
+                            progress=False
+                        )
+                        if not ticker_data.empty:
+                            current_price = ticker_data["Close"].dropna().iloc[-1]
+                            high_price = ticker_data["High"].dropna().iloc[-1]
+                            low_price = ticker_data["Low"].dropna().iloc[-1]
+                    except Exception as inner_e:
+                        print(f"Failed to extract price data for signal {symbol} in fallback: {inner_e}")
 
             if current_price is None or str(current_price) == 'nan':
                 continue

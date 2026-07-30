@@ -76,8 +76,8 @@ def is_us_holiday(check_date: date) -> bool:
 
 def is_egx_open(check_date: date) -> bool:
     """Returns True if EGX is open on the given date."""
-    # EGX is open Monday-Friday, excluding holidays
-    if check_date.weekday() >= 5:  # Saturday=5, Sunday=6
+    # EGX is open Sunday-Thursday, excluding holidays
+    if check_date.weekday() in (4, 5):  # Friday=4, Saturday=5
         return False
     return not is_egx_holiday(check_date)
 

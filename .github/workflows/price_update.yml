@@ -4,13 +4,20 @@ on:
     - cron: "0 16 * * *"  # Every day at 6PM Cairo (after markets close)
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   update_prices:
     name: Update Signal Prices & Track Portfolio
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEYS }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:

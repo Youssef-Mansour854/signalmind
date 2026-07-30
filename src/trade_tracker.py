@@ -9,15 +9,34 @@ from dotenv import load_dotenv
 # Load environmental variables
 load_dotenv()
 
-# MongoDB connection setup
+import time
+
+def connect_to_mongodb_with_retry(db_uri: str, max_retries: int = 3, initial_delay: float = 2.0):
+    """Connects to MongoDB with automatic retries and exponential backoff on DNS/network failure."""
+    delay = initial_delay
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = MongoClient(
+                db_uri,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000
+            )
+            client.admin.command('ping')
+            print(f"[SUCCESS] trade_tracker: Connected to MongoDB (attempt {attempt}/{max_retries})")
+            return client
+        except Exception as e:
+            print(f"[WARNING] trade_tracker: MongoDB connection attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(delay)
+                delay *= 2
+            else:
+                print(f"[ERROR] trade_tracker: Failed to connect to MongoDB after {max_retries} attempts: {e}")
+                return None
+
+# Initial MongoDB connection setup
 db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
-try:
-    db_client = MongoClient(db_uri, serverSelectionTimeoutMS=3000)
-    db_client.admin.command('ping')
-    print("[SUCCESS] trade_tracker: Successfully connected to MongoDB")
-except Exception as e:
-    print(f"\n[ERROR] trade_tracker: MongoDB connection error! Details: {e}\n")
-    db_client = None
+db_client = connect_to_mongodb_with_retry(db_uri)
 
 class AsyncTradeTracker:
     def __init__(self, db_uri=None, db_name="signalmind"):
@@ -27,7 +46,9 @@ class AsyncTradeTracker:
     @property
     def db(self):
         if self._db_client is None:
-            self._db_client = MongoClient(self.db_uri)
+            self._db_client = connect_to_mongodb_with_retry(self.db_uri)
+        if self._db_client is None:
+            return None
         try:
             return self._db_client.get_default_database() or self._db_client["signalmind"]
         except Exception:
@@ -35,8 +56,12 @@ class AsyncTradeTracker:
 
     async def run_tracking_cycle(self):
         print("Starting async trade tracking cycle...")
-        portfolio_col = self.db["user_portfolio"]
-        signals_col = self.db["signals"]
+        database = self.db
+        if database is None:
+            print("[ERROR] MongoDB connection unavailable in trade_tracker. Skipping tracking cycle.")
+            return
+        portfolio_col = database["user_portfolio"]
+        signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
         # Query open positions where status is 'ACTIVE'
@@ -83,6 +108,17 @@ class AsyncTradeTracker:
             signal_doc = None
             if signal_id:
                 signal_doc = await asyncio.to_thread(signals_col.find_one, {"_id": signal_id})
+            
+            if not signal_doc:
+                # Fallback: Fetch latest Active or Pending signal for this symbol
+                signal_doc = await asyncio.to_thread(
+                    signals_col.find_one,
+                    {
+                        "symbol": symbol,
+                        "status": {"$in": ["Active", "ACTIVE", "Pending", "pending"]}
+                    },
+                    sort=[("createdAt", -1)]
+                )
                 
             entry_price = trade.get("actualEntryPrice") or trade.get("entryPrice") or (signal_doc.get("entryPrice") if signal_doc else None)
             take_profit = trade.get("takeProfit") or (signal_doc.get("takeProfit") if signal_doc else None)
@@ -192,6 +228,98 @@ class AsyncTradeTracker:
                 await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
 
         print(f"Checked {len(active_trades)} active trades. Closed {closed_wins} wins, {closed_losses} losses.")
+        
+        # Calculate and persist cumulative performance metrics
+        await asyncio.to_thread(self.calculate_performance_metrics)
+
+    def calculate_performance_metrics(self) -> dict:
+        """
+        Calculates aggregate Win Rate and Profit Factor across all closed trades in MongoDB.
+        Safely handles Gross Loss = 0 cases without exceptions or inf values.
+        """
+        database = self.db
+        if database is None:
+            return {}
+
+        portfolio_col = database["user_portfolio"]
+        closed_query = {
+            "status": {"$in": ["Hit TP", "Hit SL", "EXPIRED", "EXECUTED", "SUCCESS", "FAILED", "CLOSED", "Closed", "Expired"]}
+        }
+        closed_trades = list(portfolio_col.find(closed_query))
+
+        if not closed_trades:
+            stats = {
+                "context": "global",
+                "totalClosedTrades": 0,
+                "wins": 0,
+                "losses": 0,
+                "winRate": 0.0,
+                "grossProfit": 0.0,
+                "grossLoss": 0.0,
+                "netPnL": 0.0,
+                "profitFactor": 0.0,
+                "profitFactorLabel": "0.00 (No Trades)",
+                "updatedAt": datetime.datetime.now(datetime.timezone.utc)
+            }
+            database["tradeperformance"].update_one(
+                {"context": "global"},
+                {"$set": stats},
+                upsert=True
+            )
+            return stats
+
+        wins = 0
+        losses = 0
+        gross_profit = 0.0
+        gross_loss = 0.0
+
+        for trade in closed_trades:
+            pnl = float(trade.get("finalPnL") or trade.get("itemPnL") or trade.get("realizedPnL") or 0.0)
+            status = str(trade.get("status", "")).upper()
+
+            if pnl > 0 or "HIT TP" in status or "SUCCESS" in status:
+                wins += 1
+                gross_profit += max(0.0, pnl)
+            else:
+                losses += 1
+                gross_loss += abs(min(0.0, pnl))
+
+        total_closed = len(closed_trades)
+        win_rate = round((wins / total_closed) * 100, 2) if total_closed > 0 else 0.0
+        net_pnl = round(gross_profit - gross_loss, 2)
+
+        # Safe Profit Factor calculation (handling Gross Loss = 0 case)
+        if gross_loss > 0:
+            pf = round(gross_profit / gross_loss, 2)
+            pf_label = f"{pf:.2f}"
+        elif gross_profit > 0:
+            pf = 999.0
+            pf_label = "999.00 (Perfect / No Losses)"
+        else:
+            pf = 0.0
+            pf_label = "0.00"
+
+        stats = {
+            "context": "global",
+            "totalClosedTrades": total_closed,
+            "wins": wins,
+            "losses": losses,
+            "winRate": win_rate,
+            "grossProfit": round(gross_profit, 2),
+            "grossLoss": round(gross_loss, 2),
+            "netPnL": net_pnl,
+            "profitFactor": pf,
+            "profitFactorLabel": pf_label,
+            "updatedAt": datetime.datetime.now(datetime.timezone.utc)
+        }
+
+        database["tradeperformance"].update_one(
+            {"context": "global"},
+            {"$set": stats},
+            upsert=True
+        )
+        print(f"[PERFORMANCE UPDATE] Win Rate: {win_rate}% ({wins}W / {losses}L) | Profit Factor: {pf_label} | Net PnL: ${net_pnl}")
+        return stats
 
 async def main():
     tracker = AsyncTradeTracker()

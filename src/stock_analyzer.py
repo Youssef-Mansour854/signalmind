@@ -31,6 +31,47 @@ class StockAnalyzer:
             except Exception as e:
                 print(f"Warning: Failed to initialize TvDatafeed: {e}")
 
+    def _fetch_alpha_vantage(self, symbol: str) -> Optional[pd.DataFrame]:
+        """Fetches daily stock data using Alpha Vantage API."""
+        api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+        if not api_key:
+            return None
+
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize=compact&apikey={api_key}"
+        try:
+            resp = session.get(url, timeout=10)
+            if resp.status_code != 200:
+                print(f"[ALPHA VANTAGE] HTTP Error {resp.status_code} for {symbol}")
+                return None
+
+            data = resp.json()
+            if "Note" in data or "Information" in data or "Error Message" in data:
+                note = data.get("Note") or data.get("Information") or data.get("Error Message")
+                print(f"[ALPHA VANTAGE LIMIT/NOTICE] {symbol}: {note}")
+                return None
+
+            time_series = data.get("Time Series (Daily)")
+            if not time_series:
+                return None
+
+            df = pd.DataFrame.from_dict(time_series, orient='index')
+            df = df.rename(columns={
+                '1. open': 'Open',
+                '2. high': 'High',
+                '3. low': 'Low',
+                '4. close': 'Close',
+                '5. volume': 'Volume'
+            })
+            df.index = pd.to_datetime(df.index)
+            df = df.sort_index()
+            df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+            if df.empty:
+                return None
+            return df
+        except Exception as e:
+            print(f"[ALPHA VANTAGE ERROR] {symbol}: {e}")
+            return None
+
     def _fetch_yfinance(self, symbol: str) -> Optional[pd.DataFrame]:
         """Fetches historical stock data using yfinance."""
         try:
@@ -52,50 +93,58 @@ class StockAnalyzer:
             return None
 
     def fetch_data(self, symbol: str) -> Optional[pd.DataFrame]:
-        """Fetches historical stock data using yfinance for US/EGX fallbacks and tvdatafeed for EGX (when local)."""
+        """Fetches historical stock data using Alpha Vantage as primary source and yfinance as fallback."""
+        # 1. Primary Attempt: Alpha Vantage API
+        df_av = self._fetch_alpha_vantage(symbol)
+        if df_av is not None and not df_av.empty:
+            print(f"[PRIMARY - Alpha Vantage] Successfully fetched data for {symbol}")
+            self.consecutive_yfinance_failures = 0
+            return df_av
+
+        # 2. Fallback: yfinance with Cooldown / Backoff
+        if hasattr(self, 'consecutive_yfinance_failures') and self.consecutive_yfinance_failures > 2:
+            cooldown = min(10.0, 1.5 * self.consecutive_yfinance_failures)
+            print(f"[COOLDOWN] Applying {cooldown:.1f}s backoff delay before yfinance fallback for {symbol}...")
+            time.sleep(cooldown)
+
         is_github_actions = os.environ.get('GITHUB_ACTIONS') == 'true'
 
-        # Check if the ticker symbol ends with .CA (EGX stock)
         if symbol.endswith(".CA") and not is_github_actions:
             if self.tv is None:
                 print(f"Warning: TvDatafeed not initialized. Falling back to yfinance for {symbol}")
-                return self._fetch_yfinance(symbol)
-            try:
-                # Extract the core symbol (e.g. SAUD.CA becomes SAUD)
-                core_symbol = symbol.split(".")[0]
-                
-                # Fetch daily historical bars from TradingView
-                df = self.tv.get_hist(
-                    symbol=core_symbol,
-                    exchange='EGX',
-                    interval=Interval.in_daily,
-                    n_bars=250
-                )
-                
-                if df is None or df.empty:
-                    print(f"Warning: No data returned from TradingView for EGX symbol {core_symbol}. Falling back to yfinance.")
-                    return self._fetch_yfinance(symbol)
-
-                # Rename columns from lowercase to capitalized to guarantee absolute compatibility
-                df = df.rename(columns={
-                    'open': 'Open',
-                    'high': 'High',
-                    'low': 'Low',
-                    'close': 'Close',
-                    'volume': 'Volume'
-                })
-
-                # Select only the columns needed for technical indicators
-                df = df[["Open", "High", "Low", "Close", "Volume"]]
-                df = df.astype(float)
-                return df
-
-            except Exception as e:
-                print(f"Warning: Error fetching EGX data from TradingView for {symbol}: {e}. Falling back to yfinance.")
-                return self._fetch_yfinance(symbol)
+                res = self._fetch_yfinance(symbol)
+            else:
+                try:
+                    core_symbol = symbol.split(".")[0]
+                    df = self.tv.get_hist(
+                        symbol=core_symbol,
+                        exchange='EGX',
+                        interval=Interval.in_daily,
+                        n_bars=250
+                    )
+                    if df is None or df.empty:
+                        res = self._fetch_yfinance(symbol)
+                    else:
+                        df = df.rename(columns={
+                            'open': 'Open',
+                            'high': 'High',
+                            'low': 'Low',
+                            'close': 'Close',
+                            'volume': 'Volume'
+                        })
+                        res = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+                except Exception as e:
+                    print(f"Warning: Error fetching EGX data from TradingView for {symbol}: {e}. Falling back to yfinance.")
+                    res = self._fetch_yfinance(symbol)
         else:
-            # US stock (standard ticker) or EGX on GitHub Actions / Local fallback using yfinance
-            return self._fetch_yfinance(symbol)
+            res = self._fetch_yfinance(symbol)
+
+        if res is None or res.empty:
+            self.consecutive_yfinance_failures = getattr(self, 'consecutive_yfinance_failures', 0) + 1
+        else:
+            self.consecutive_yfinance_failures = 0
+
+        return res
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculates technical indicators using ta library."""
@@ -168,6 +217,34 @@ class StockAnalyzer:
         df['StochRSI_K'] = stoch_rsi.stochrsi_k()
         df['StochRSI_D'] = stoch_rsi.stochrsi_d()
 
+        # ATR (14)
+        atr_ind = ta.volatility.AverageTrueRange(
+            high=df['High'], low=df['Low'], close=df['Close'], window=14
+        )
+        df['ATR_14'] = atr_ind.average_true_range()
+
+        # Weekly Resampling for Weekly Trend Filter
+        try:
+            df_weekly = df[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
+                'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'
+            }).dropna()
+            if len(df_weekly) >= 50:
+                w_ema20 = ta.trend.EMAIndicator(df_weekly['Close'], window=20).ema_indicator().iloc[-1]
+                w_ema50 = ta.trend.EMAIndicator(df_weekly['Close'], window=50).ema_indicator().iloc[-1]
+                w_close = df_weekly['Close'].iloc[-1]
+                df['Weekly_EMA20'] = w_ema20
+                df['Weekly_EMA50'] = w_ema50
+                df['Weekly_Close'] = w_close
+            else:
+                df['Weekly_EMA20'] = None
+                df['Weekly_EMA50'] = None
+                df['Weekly_Close'] = None
+        except Exception as e:
+            print(f"[WARNING] Weekly indicator calculation error: {e}")
+            df['Weekly_EMA20'] = None
+            df['Weekly_EMA50'] = None
+            df['Weekly_Close'] = None
+
         return df
 
     def get_latest_data(self, df: pd.DataFrame) -> Dict:
@@ -199,7 +276,11 @@ class StockAnalyzer:
             'bb_low': latest['BB_Low'],
             'bb_mid': latest['BB_Mid'],
             'stoch_rsi_k': latest['StochRSI_K'],
-            'stoch_rsi_d': latest['StochRSI_D']
+            'stoch_rsi_d': latest['StochRSI_D'],
+            'atr': latest['ATR_14'],
+            'weekly_ema_20': latest.get('Weekly_EMA20'),
+            'weekly_ema_50': latest.get('Weekly_EMA50'),
+            'weekly_close': latest.get('Weekly_Close')
         }
 
         for k, v in data.items():
@@ -209,6 +290,106 @@ class StockAnalyzer:
                 data[k] = None
 
         return data
+
+    def is_in_weekly_downtrend(self, data: Dict) -> bool:
+        """
+        Binary complementary weekly trend filter:
+        Returns True (downtrend -> reject) IF AND ONLY IF BOTH:
+        - weekly_close < weekly_ema_50
+        - weekly_ema_20 < weekly_ema_50
+        Otherwise returns False (accept).
+        This guarantees 100% mutual exclusivity with zero gap.
+        """
+        w_close = data.get('weekly_close')
+        w_ema20 = data.get('weekly_ema_20')
+        w_ema50 = data.get('weekly_ema_50')
+
+        if w_close is None or w_ema20 is None or w_ema50 is None:
+            return False
+
+        import pandas as pd
+        if pd.isna(w_close) or pd.isna(w_ema20) or pd.isna(w_ema50):
+            return False
+
+        return bool(w_close < w_ema50 and w_ema20 < w_ema50)
+
+    def calculate_trading_levels(self, stock_data: Dict) -> Dict[str, float]:
+        """
+        Pure Python calculation of trading levels (Entry, Stop Loss, Take Profit)
+        based on technical indicators (Close, Support, Resistance, ATR).
+        """
+        close = float(stock_data.get('close', 0) or 0)
+        atr = float(stock_data.get('atr', 0) or 0)
+        support = float(stock_data.get('support', 0) or 0)
+        resistance = float(stock_data.get('resistance', 0) or 0)
+
+        # Fallback values if ATR missing
+        if atr <= 0:
+            atr = close * 0.02
+
+        decimals = 4 if close < 10 else 2
+
+        # 1. Entry Price: simulate limit order entry on minor pullback (0.5 * ATR or 1.5% below close)
+        pullback_offset = min(0.015 * close, 0.5 * atr)
+        entry_price = round(close - pullback_offset, decimals)
+
+        # 2. Stop Loss: below support or 1.5 * ATR below entry
+        if support > 0 and support < entry_price and (entry_price - support) <= (3.0 * atr):
+            stop_loss = round(support - (0.25 * atr), decimals)
+        else:
+            stop_loss = round(entry_price - (1.5 * atr), decimals)
+
+        # Ensure stop_loss is below entry
+        if stop_loss >= entry_price:
+            stop_loss = round(entry_price * 0.96, decimals)
+
+        # 3. Take Profit: 1.8x RRR target, strictly capped below resistance with a buffer
+        risk = entry_price - stop_loss
+        target_rr = entry_price + (risk * 1.8)
+
+        if resistance > 0 and resistance > entry_price:
+            res_buffer = min(0.005 * close, 0.25 * atr)
+            capped_resistance = resistance - res_buffer
+            if capped_resistance > entry_price:
+                take_profit = round(min(target_rr, capped_resistance), decimals)
+            else:
+                take_profit = round(target_rr, decimals)
+        else:
+            take_profit = round(target_rr, decimals)
+
+        return {
+            "entry_price": entry_price,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit
+        }
+
+    def validate_trading_levels(self, entry: float, sl: float, tp: float, resistance: float = 0) -> tuple:
+        """
+        Validates mathematical integrity of trading levels:
+        1. sl < entry < tp
+        2. Actual Risk-Reward Ratio (based on final take_profit) >= 1.5
+        3. Take profit strictly does not breach 30-day resistance
+        """
+        if not (sl < entry < tp):
+            return False, f"Invalid order logic: SL ({sl}) < Entry ({entry}) < TP ({tp}) failed"
+
+        risk = entry - sl
+        reward = tp - entry
+
+        if risk <= 0:
+            return False, f"Risk ({risk}) is non-positive"
+
+        rr_ratio = reward / risk
+        if rr_ratio < 1.5:
+            return False, f"Actual Risk-Reward ratio {rr_ratio:.2f} (TP: {tp}, Entry: {entry}) is below minimum required 1.50"
+
+        if resistance > 0:
+            if resistance <= entry:
+                return False, f"Entry ({entry}) is at or above 30-day resistance ({resistance})"
+            if tp > resistance:
+                return False, f"Take profit ({tp}) breaches 30-day resistance level ({resistance})"
+
+        return True, "Valid"
 
     def is_in_macro_downtrend(self, data: Dict) -> bool:
         """
