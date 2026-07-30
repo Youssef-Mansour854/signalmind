@@ -131,7 +131,23 @@ export async function fetchMarketData(
     liveScrapedPrice = await scrapeEGXLivePrice(symbol);
   }
 
-  if (validBars.length === 0 && !liveScrapedPrice) {
+  // If US: Fetch real-time live market quote from Yahoo Finance
+  let liveQuotePrice: number | null = null;
+  if (!isEGX) {
+    try {
+      const quote: any = await yahooFinance.quote(yfSymbol);
+      if (quote) {
+        liveQuotePrice = quote.regularMarketPrice ?? quote.postMarketPrice ?? quote.preMarketPrice ?? null;
+        if (liveQuotePrice && liveQuotePrice > 0) {
+          console.log(`[YahooFinance Live Quote] Real-time market price for ${yfSymbol}: ${liveQuotePrice}`);
+        }
+      }
+    } catch (quoteErr: any) {
+      console.warn(`[YahooFinance Live Quote] Failed to fetch live quote for ${yfSymbol}: ${quoteErr.message}`);
+    }
+  }
+
+  if (validBars.length === 0 && !liveScrapedPrice && !liveQuotePrice) {
     throw new Error(`لم يتم العثور على بيانات فنية أو سعر مباشر للرمز ${symbol}`);
   }
 
@@ -185,7 +201,7 @@ export async function fetchMarketData(
   }
 
   const closes = validBars.map((bar) => bar.close);
-  const latestPrice = liveScrapedPrice ?? closes[closes.length - 1];
+  const latestPrice = (isEGX ? liveScrapedPrice : liveQuotePrice) ?? closes[closes.length - 1];
 
   // Technical Indicators
   const rsiValues = RSI.calculate({ values: closes, period: 14 });
