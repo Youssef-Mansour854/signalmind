@@ -315,7 +315,7 @@ export async function POST(request: Request) {
 
         const signalType = parsed.signalType || 'BUY';
         const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
-        const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+        const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'PENDING';
         const actualEntryPrice = entryCheck.actualEntryPrice;
 
         const createdAt = new Date();

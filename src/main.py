@@ -64,6 +64,25 @@ async def main_async():
     market_target = os.environ.get("MARKET_TARGET", "BOTH")
     context_str = f"Analyzer_{market_target}"
 
+    # --- DST Time Guard for US Market Open Alignment ---
+    # When triggered by automated GitHub schedule for US/BOTH, verify local NY time is in the 09:15 - 09:50 AM window.
+    # If triggered at the wrong DST hour (e.g. 10:30 AM NY time), log a clear message and exit gracefully with code 0.
+    is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+    try:
+        from zoneinfo import ZoneInfo
+        ny_now = datetime.datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        import pytz
+        ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
+
+    ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
+
+    if is_scheduled and market_target in ("US", "BOTH"):
+        is_in_open_window = (ny_now.hour == 9 and 15 <= ny_now.minute <= 50)
+        if not is_in_open_window:
+            print(f"[INFO] Skipped: Outside DST-adjusted market open window (Current NY time: {ny_time_str}). This is an expected DST guard skip.")
+            return
+
     # Prevent duplicate runs on the same day (UTC date)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + datetime.timedelta(days=1)

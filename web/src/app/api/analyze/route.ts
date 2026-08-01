@@ -218,7 +218,7 @@ ${timeframePromptContext}
 
     const signalType = parsed.signalType || 'BUY';
     const entryCheck = await evaluateExecutionTrigger(signalType, entry, latestPrice);
-    const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'Pending';
+    const initialStatus = entryCheck.shouldExecute ? 'ACTIVE' : 'PENDING';
     const actualEntryPrice = entryCheck.actualEntryPrice; // Real execution price saved in MongoDB
 
     // Deduplication: before inserting the new signal, find existing active ones for symbol and timeframe, and set to EXPIRED

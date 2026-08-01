@@ -2,19 +2,17 @@ name: SignalMind Cloud Pipeline
 
 on:
   schedule:
-    - cron: "0 4 * * 1-5"    # US: 6AM Cairo (Mon-Fri)
-    - cron: "30 12 * * 0-4"  # EGX: 2:30PM Cairo (Sun-Thu)
+    - cron: "30 13 * * 1-5"  # US Market Open: Summer / EDT (9:30 AM NY = 13:30 UTC)
+    - cron: "30 14 * * 1-5"  # US Market Open: Winter / EST (9:30 AM NY = 14:30 UTC)
   workflow_dispatch:
     inputs:
       market:
         description: 'Market to analyze'
         required: true
-        default: 'BOTH'
+        default: 'US'
         type: choice
         options:
           - US
-          - EGX
-          - BOTH
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,9 +23,7 @@ jobs:
     name: US Market Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 1-5') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.market == 'US' || inputs.market == 'BOTH'))
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     env:
       MONGODB_URI: ${{ secrets.MONGODB_URI }}
       GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
@@ -46,35 +42,6 @@ jobs:
       - name: Update Prices First
         run: python src/price_updater.py
       - name: Run US Analysis
-        run: python src/main.py
-      - name: Track Portfolio
-        run: python src/trade_tracker.py
-
-  egx_analysis:
-    name: EGX Market Analysis
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: |
-      (github.event_name == 'schedule' && github.event.schedule == '30 12 * * 0-4') ||
-      (github.event_name == 'workflow_dispatch' && (inputs.market == 'EGX' || inputs.market == 'BOTH'))
-    env:
-      MONGODB_URI: ${{ secrets.MONGODB_URI }}
-      GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEYS }}
-      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      MARKET_TARGET: "EGX"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-          cache: "pip"
-      - run: pip install -r requirements.txt
-      - name: Update Prices First
-        run: python src/price_updater.py
-      - name: Run EGX Analysis
         run: python src/main.py
       - name: Track Portfolio
         run: python src/trade_tracker.py
