@@ -304,6 +304,20 @@ async def main_async():
                     results.append({"status": "failed", "symbol": symbol})
                     continue
 
+                # Fetch 60m intraday precision data for DAY_TRADE level calculation
+                intraday_data = await asyncio.to_thread(analyzer.get_intraday_data, symbol)
+                if intraday_data:
+                    intraday_levels = analyzer.calculate_trading_levels(stock_data, intraday_data=intraday_data)
+                    is_valid, val_reason = analyzer.validate_trading_levels(
+                        entry=intraday_levels['entry_price'],
+                        sl=intraday_levels['stop_loss'],
+                        tp=intraday_levels['take_profit'],
+                        resistance=float(intraday_data.get('intraday_resistance', stock_data.get('resistance', 0)))
+                    )
+                    if is_valid:
+                        stock_data.update(intraday_levels)
+                        print(f"[INTRADAY PRECISION] Applied 60m intraday levels for {symbol}: Entry=${intraday_levels['entry_price']}, SL=${intraday_levels['stop_loss']}, TP=${intraday_levels['take_profit']}")
+
                 # Enforce pre-calculated 100% Python trading levels
                 analysis['entry_price'] = stock_data['entry_price']
                 analysis['stop_loss'] = stock_data['stop_loss']

@@ -313,24 +313,65 @@ class StockAnalyzer:
 
         return bool(w_close < w_ema50 and w_ema20 < w_ema50)
 
-    def calculate_trading_levels(self, stock_data: Dict) -> Dict[str, float]:
+    def get_intraday_data(self, symbol: str) -> Optional[Dict[str, float]]:
+        """
+        Fetches 60m intraday data for last 30 days via yfinance and calculates:
+        - 14-period Hourly ATR
+        - 5-10 day 60m Support and Resistance
+        Returns None if data unavailable.
+        """
+        try:
+            ticker = yf.Ticker(symbol, session=session)
+            df_60m = ticker.history(period="1mo", interval="60m")
+            if df_60m is None or df_60m.empty or len(df_60m) < 20:
+                return None
+
+            atr_ind = ta.volatility.AverageTrueRange(high=df_60m['High'], low=df_60m['Low'], close=df_60m['Close'], window=14)
+            df_60m['ATR_14'] = atr_ind.average_true_range()
+            hourly_atr = float(df_60m['ATR_14'].iloc[-1])
+
+            # Tail last 70 hourly bars (approx 10 trading days)
+            df_10d = df_60m.tail(70)
+            hourly_support = float(df_10d['Low'].min())
+            hourly_resistance = float(df_10d['High'].max())
+
+            if pd.isna(hourly_atr) or hourly_atr <= 0:
+                return None
+
+            return {
+                "intraday_atr": hourly_atr,
+                "intraday_support": hourly_support,
+                "intraday_resistance": hourly_resistance
+            }
+        except Exception as e:
+            print(f"[WARNING] Failed to fetch intraday data for {symbol}: {e}")
+            return None
+
+    def calculate_trading_levels(self, stock_data: Dict, intraday_data: Optional[Dict] = None) -> Dict[str, float]:
         """
         Pure Python calculation of trading levels (Entry, Stop Loss, Take Profit)
-        based on technical indicators (Close, Support, Resistance, ATR).
+        for DAY_TRADE setups using Intraday 60m ATR & Support/Resistance when available,
+        with automatic fallback to Daily indicators.
         """
         close = float(stock_data.get('close', 0) or 0)
-        atr = float(stock_data.get('atr', 0) or 0)
-        support = float(stock_data.get('support', 0) or 0)
-        resistance = float(stock_data.get('resistance', 0) or 0)
 
-        # Fallback values if ATR missing
+        # Determine ATR, Support, and Resistance with Intraday priority and Daily fallback
+        if intraday_data and isinstance(intraday_data, dict) and intraday_data.get('intraday_atr', 0) > 0:
+            atr = float(intraday_data['intraday_atr'])
+            support = float(intraday_data.get('intraday_support', 0) or stock_data.get('support', 0) or 0)
+            resistance = float(intraday_data.get('intraday_resistance', 0) or stock_data.get('resistance', 0) or 0)
+        else:
+            atr = float(stock_data.get('atr', 0) or 0)
+            support = float(stock_data.get('support', 0) or 0)
+            resistance = float(stock_data.get('resistance', 0) or 0)
+
         if atr <= 0:
             atr = close * 0.02
 
         decimals = 4 if close < 10 else 2
 
-        # 1. Entry Price: simulate limit order entry on minor pullback (0.5 * ATR or 1.5% below close)
-        pullback_offset = min(0.015 * close, 0.5 * atr)
+        # 1. Entry Price: simulate limit order entry on minor intraday pullback (0.5 * ATR or 0.5% below close)
+        pullback_offset = min(0.005 * close, 0.5 * atr)
         entry_price = round(close - pullback_offset, decimals)
 
         # 2. Stop Loss: below support or 1.5 * ATR below entry
@@ -339,9 +380,8 @@ class StockAnalyzer:
         else:
             stop_loss = round(entry_price - (1.5 * atr), decimals)
 
-        # Ensure stop_loss is below entry
         if stop_loss >= entry_price:
-            stop_loss = round(entry_price * 0.96, decimals)
+            stop_loss = round(entry_price * 0.98, decimals)
 
         # 3. Take Profit: 1.8x RRR target, strictly capped below resistance with a buffer
         risk = entry_price - stop_loss

@@ -76,9 +76,29 @@ class SignalPriceUpdater:
             return self._db_client["signalmind"]
 
     async def update_active_and_pending_signals(self):
-        print(f"[INFO] Price Updater starting - fetching latest prices before analysis...")
-        print(f"[INFO] This ensures analysis uses most recent available market data")
-        print("Starting daily signal price updater...")
+        # DST Time Guard for Intraday Price Updater Checkpoints
+        is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+        market_target = os.environ.get("MARKET_TARGET", "US")
+        if is_scheduled and market_target == "US":
+            try:
+                from zoneinfo import ZoneInfo
+                ny_now = datetime.datetime.now(ZoneInfo("America/New_York"))
+            except Exception:
+                import pytz
+                ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
+
+            ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
+            
+            # Mid-Day Checkpoint: 12:15 PM - 12:45 PM NY Time
+            is_midday_window = (ny_now.hour == 12 and 15 <= ny_now.minute <= 45)
+            # Market Close Checkpoint: 04:00 PM - 04:30 PM NY Time
+            is_close_window = (ny_now.hour == 16 and 0 <= ny_now.minute <= 30)
+
+            if not (is_midday_window or is_close_window):
+                print(f"[INFO] Skipped: Outside DST-adjusted intraday price update window (Current NY time: {ny_time_str}). Expected DST guard skip.")
+                return
+
+        print(f"[INFO] Price Updater starting - fetching latest prices for active DAY_TRADE signals...")
         database = self.db
         if database is None:
             print("[ERROR] MongoDB connection unavailable in price_updater. Skipping price update.")
@@ -86,8 +106,15 @@ class SignalPriceUpdater:
         signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
-        # Query signals with status 'PENDING' or 'ACTIVE' (case-insensitive regex fallback)
-        query = {"status": {"$regex": "^(active|pending)$", "$options": "i"}}
+        # Query signals with status 'PENDING' or 'ACTIVE' focused specifically on DAY_TRADE setups
+        query = {
+            "status": {"$regex": "^(active|pending)$", "$options": "i"},
+            "$or": [
+                {"tradeType": "DAY_TRADE"},
+                {"tradeType": {"$exists": False}},
+                {"tradeType": None}
+            ]
+        }
         active_signals = await asyncio.to_thread(list, signals_col.find(query).sort("createdAt", -1))
 
         if not active_signals:
