@@ -1,0 +1,55 @@
+name: SignalMind Quick Scan Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: 'Comma-separated stock symbols (e.g. AAPL,MSFT,TSLA)'
+        required: true
+        default: 'AAPL,MSFT,TSLA,NVDA,META'
+        type: string
+      trade_type:
+        description: 'Trade Type Strategy (DAY_TRADE or SWING_MONTHLY)'
+        required: true
+        default: 'DAY_TRADE'
+        type: choice
+        options:
+          - DAY_TRADE
+          - SWING_MONTHLY
+      market:
+        description: 'Target market'
+        required: false
+        default: 'US'
+        type: string
+
+concurrency:
+  group: quick-scan-dispatch
+  cancel-in-progress: false
+
+jobs:
+  quick_scan:
+    name: Quick Scan Execution
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEYS }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      MARKET_TARGET: ${{ inputs.market || 'US' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Run Quick Scan Engine
+        run: |
+          if [ "${{ inputs.trade_type }}" = "SWING_MONTHLY" ]; then
+            python src/swing_main.py --market "${{ inputs.market }}" --trade_type "SWING_MONTHLY" --symbols "${{ inputs.symbols }}"
+          else
+            python src/main.py --symbols "${{ inputs.symbols }}"
+          fi

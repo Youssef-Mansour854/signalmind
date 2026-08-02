@@ -20,7 +20,7 @@ from sharia_filter import check_sharia_compliance
 # Load env variables at startup
 load_dotenv()
 
-async def main_async():
+async def main_async(custom_symbols: list = None):
     try:
         config.validate_config()
     except ValueError as e:
@@ -65,8 +65,6 @@ async def main_async():
     context_str = f"Analyzer_{market_target}"
 
     # --- DST Time Guard for US Market Open Alignment ---
-    # When triggered by automated GitHub schedule for US/BOTH, verify local NY time is in the 09:15 - 09:50 AM window.
-    # If triggered at the wrong DST hour (e.g. 10:30 AM NY time), log a clear message and exit gracefully with code 0.
     is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
     try:
         from zoneinfo import ZoneInfo
@@ -77,35 +75,39 @@ async def main_async():
 
     ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
 
-    if is_scheduled and market_target in ("US", "BOTH"):
+    if is_scheduled and market_target in ("US", "BOTH") and not custom_symbols:
         is_in_open_window = (ny_now.hour == 9 and 15 <= ny_now.minute <= 50)
         if not is_in_open_window:
             print(f"[INFO] Skipped: Outside DST-adjusted market open window (Current NY time: {ny_time_str}). This is an expected DST guard skip.")
             return
 
-    # Prevent duplicate runs on the same day (UTC date)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + datetime.timedelta(days=1)
-    try:
-        existing_run = await asyncio.to_thread(
-            logs_col.find_one,
-            {
-                "context": context_str,
-                "level": "info",
-                "createdAt": {"$gte": today_start, "$lt": today_end}
-            }
-        )
-        if existing_run:
-            print("[INFO] Already ran today, skipping analysis.")
-            return
-    except Exception as e:
-        print(f"[WARNING] Error checking for duplicate run: {e}")
+    # Prevent duplicate runs on the same day (UTC date) - bypassed for manual custom symbol scans
+    if not custom_symbols:
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + datetime.timedelta(days=1)
+        try:
+            existing_run = await asyncio.to_thread(
+                logs_col.find_one,
+                {
+                    "context": context_str,
+                    "level": "info",
+                    "createdAt": {"$gte": today_start, "$lt": today_end}
+                }
+            )
+            if existing_run:
+                print("[INFO] Already ran today, skipping analysis.")
+                return
+        except Exception as e:
+            print(f"[WARNING] Error checking for duplicate run: {e}")
 
     today_date = date.today()
 
     stocks_to_analyze = []
 
-    if market_target == "US":
+    if custom_symbols:
+        stocks_to_analyze = custom_symbols
+        print(f"[INFO] Running Quick Scan for {len(custom_symbols)} custom symbols: {custom_symbols}")
+    elif market_target == "US":
         if is_us_open(today_date):
             stocks_to_analyze = config.US_STOCKS
             print(f"[INFO] Running US-only analysis")
@@ -584,6 +586,21 @@ def is_process_running(pid: int) -> bool:
             return False
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
+
+    import argparse
+    parser = argparse.ArgumentParser(description="SignalMind Stock Analysis Engine")
+    parser.add_argument("--symbols", type=str, default=None, help="Comma-separated list of symbols to analyze (e.g. AAPL,MSFT,TSLA)")
+    args, _ = parser.parse_known_args()
+
+    custom_symbols = None
+    if args.symbols:
+        custom_symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+
     if os.path.exists(LOCK_FILE):
         try:
             with open(LOCK_FILE, "r") as f:
@@ -609,7 +626,7 @@ def main():
         sys.exit(1)
 
     try:
-        asyncio.run(main_async())
+        asyncio.run(main_async(custom_symbols=custom_symbols))
     finally:
         if os.path.exists(LOCK_FILE):
             try:

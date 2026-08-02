@@ -7,32 +7,46 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 from pymongo import MongoClient
 
-from src.config import US_STOCKS, EGX_STOCKS, INDICATOR_PARAMS, GROQ_MODEL, GROQ_API_KEYS
-from src.stock_analyzer import StockAnalyzer
-from src.swing_analyzer import SwingAnalyzer
-from src.ai_analyst import GroqAnalyst
-from src.ranking_engine import PythonRankingEngine
-from src.sharia_filter import check_sharia_compliance
-from src.telegram_sender import TelegramSender
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from config import US_STOCKS, EGX_STOCKS, INDICATOR_PARAMS, GROQ_MODEL, GROQ_API_KEYS
+    from stock_analyzer import StockAnalyzer
+    from swing_analyzer import SwingAnalyzer
+    from ai_analyst import GroqAnalyst
+    from ranking_engine import PythonRankingEngine
+    from sharia_filter import check_sharia_compliance
+    from telegram_sender import TelegramSender
+except ImportError:
+    from src.config import US_STOCKS, EGX_STOCKS, INDICATOR_PARAMS, GROQ_MODEL, GROQ_API_KEYS
+    from src.stock_analyzer import StockAnalyzer
+    from src.swing_analyzer import SwingAnalyzer
+    from src.ai_analyst import GroqAnalyst
+    from src.ranking_engine import PythonRankingEngine
+    from src.sharia_filter import check_sharia_compliance
+    from src.telegram_sender import TelegramSender
+
+_cfg = sys.modules.get('config') or sys.modules.get('src.config')
 
 class SwingConfig:
     STOCKS = {"US": US_STOCKS, "EGX": EGX_STOCKS}
     INDICATOR_PARAMS = INDICATOR_PARAMS
     GROQ_MODEL = GROQ_MODEL
-    GROQ_FAST_MODEL = getattr(sys.modules['src.config'], 'GROQ_FAST_MODEL', 'llama-3.1-8b-instant')
+    GROQ_FAST_MODEL = getattr(_cfg, 'GROQ_FAST_MODEL', 'llama-3.1-8b-instant')
     GROQ_API_KEYS = GROQ_API_KEYS
-    DISCLAIMER_TEXT = getattr(sys.modules['src.config'], 'DISCLAIMER_TEXT', 'هذه التوصيات للأغراض التعليمية فقط وليست نصيحة مالية')
-    TELEGRAM_BOT_TOKEN = getattr(sys.modules['src.config'], 'TELEGRAM_BOT_TOKEN', None)
-    TELEGRAM_CHAT_ID = getattr(sys.modules['src.config'], 'TELEGRAM_CHAT_ID', None)
+    DISCLAIMER_TEXT = getattr(_cfg, 'DISCLAIMER_TEXT', 'هذه التوصيات للأغراض التعليمية فقط وليست نصيحة مالية')
+    TELEGRAM_BOT_TOKEN = getattr(_cfg, 'TELEGRAM_BOT_TOKEN', None)
+    TELEGRAM_CHAT_ID = getattr(_cfg, 'TELEGRAM_CHAT_ID', None)
 
-async def process_swing_market(market: str = "US", target_trade_type: str = "SWING_MONTHLY"):
+async def process_swing_market(market: str = "US", target_trade_type: str = "SWING_MONTHLY", custom_symbols: List[str] = None):
     """
     Main pipeline for Weekly & Long-Term Swing Trading signals.
     - target_trade_type: "SWING_MONTHLY" or "SWING_YEAR_END"
     """
     # --- DST Time Guard for US Market Close Alignment ---
     is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
-    if is_scheduled and market == "US":
+    if is_scheduled and market == "US" and not custom_symbols:
         try:
             from zoneinfo import ZoneInfo
             ny_now = datetime.now(ZoneInfo("America/New_York"))
@@ -69,7 +83,12 @@ async def process_swing_market(market: str = "US", target_trade_type: str = "SWI
     signals_col = db["signals"]
 
     # Select stock universe
-    symbols = SwingConfig.STOCKS.get(market, [])
+    if custom_symbols:
+        symbols = custom_symbols
+        print(f"[INFO] Running Quick Swing Scan for {len(custom_symbols)} custom symbols: {custom_symbols}")
+    else:
+        symbols = SwingConfig.STOCKS.get(market, [])
+
     if not symbols:
         print(f"[ERROR] No stocks found for market {market}")
         return
@@ -263,12 +282,23 @@ async def process_swing_market(market: str = "US", target_trade_type: str = "SWI
     print(f"========================================================\n")
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(description="SignalMind Swing Trading Pipeline")
     parser.add_argument("--market", type=str, default="US", choices=["US", "EGX"], help="Target market")
     parser.add_argument("--trade_type", type=str, default="SWING_MONTHLY", choices=["SWING_MONTHLY", "SWING_YEAR_END"], help="Swing trade duration type")
-    args = parser.parse_args()
+    parser.add_argument("--symbols", type=str, default=None, help="Comma-separated list of custom symbols (e.g. AAPL,MSFT,TSLA)")
+    args, _ = parser.parse_known_args()
 
-    asyncio.run(process_swing_market(market=args.market, target_trade_type=args.trade_type))
+    custom_symbols = None
+    if args.symbols:
+        custom_symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+
+    asyncio.run(process_swing_market(market=args.market, target_trade_type=args.trade_type, custom_symbols=custom_symbols))
 
 if __name__ == "__main__":
     main()

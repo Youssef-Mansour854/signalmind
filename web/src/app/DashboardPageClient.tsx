@@ -109,31 +109,24 @@ export default function DashboardPage() {
   const [activeRoutine, setActiveRoutine] = useState<'OPENING_BELL' | 'MACRO_SCAN' | null>(null);
   const [scannerResult, setScannerResult] = useState<string | null>(null);
 
-  const handleRunScanner = async (routine: 'OPENING_BELL' | 'MACRO_SCAN' = 'OPENING_BELL', isAuto = false) => {
+  const handleRunScanner = async (routine: 'OPENING_BELL' | 'MACRO_SCAN' = 'OPENING_BELL') => {
     setIsScanning(true);
     setActiveRoutine(routine);
     setScannerResult(null);
-    const tfParam = routine === 'OPENING_BELL' ? 'DAY_TRADE' : 'SWING';
     try {
-      const res = await fetch(`/api/scanner/run?manual=true&tf=${tfParam}`, {
+      const res = await fetch('/api/scanner/trigger', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-manual-trigger': 'true'
-        },
-        body: JSON.stringify({ routine, tf: tfParam })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routine })
       });
       const json = await res.json();
       if (json.success) {
-        setScannerResult(isAuto ? `⚡ تم المسح الآلي اللحظي فور افتتاح السوق الأمريكية (09:30 AM NY): ${json.message}` : json.message);
-        // Refresh data
-        fetchSignals();
-        fetchPortfolioStats(portfolioType, timeframe);
+        setScannerResult(json.message);
       } else {
-        if (!isAuto) alert(json.error || 'فشلت عملية تشغيل رادار السوق');
+        alert(json.error || 'فشلت عملية تشغيل رادار السوق');
       }
     } catch (err: any) {
-      if (!isAuto) alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
+      alert(err.message || 'حدث خطأ غير متوقع أثناء تشغيل الرادار');
     } finally {
       setIsScanning(false);
       setActiveRoutine(null);
@@ -279,39 +272,9 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [activeSymbolsStr]);
 
-  // US Market Open Precision Trigger (09:30:00 AM NY Time)
+  // US Market Open Trigger (Disabled while under maintenance)
   useEffect(() => {
-    const calculateMsUntilMarketOpen = (): number | null => {
-      const now = new Date();
-      const nyDateStr = now.toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-      const nyTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false });
-      
-      const nyDateObj = new Date(`${nyDateStr} ${nyTimeStr}`);
-      const dayOfWeek = nyDateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
-
-      // Only run on weekdays (Monday - Friday)
-      if (dayOfWeek === 0 || dayOfWeek === 6) return null;
-
-      // Target 09:30:00 AM today in NY
-      const targetNYObj = new Date(`${nyDateStr} 09:30:00`);
-      const diffMs = targetNYObj.getTime() - nyDateObj.getTime();
-
-      // If current NY time is before 09:30:00 AM today
-      if (diffMs > 0) {
-        return diffMs;
-      }
-      return null;
-    };
-
-    const msRemaining = calculateMsUntilMarketOpen();
-    if (msRemaining !== null && msRemaining > 0) {
-      console.log(`[AUTO-PILOT] Scheduled market open scanner in ${(msRemaining / 1000).toFixed(1)} seconds.`);
-      const timer = setTimeout(() => {
-        handleRunScanner('OPENING_BELL', true);
-      }, msRemaining);
-
-      return () => clearTimeout(timer);
-    }
+    // Automatic open trigger disabled
   }, []);
 
   const handleCashSubmit = async (e: React.FormEvent) => {
@@ -662,7 +625,7 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Opening Bell Scanner Button */}
           <button
-            onClick={() => handleRunScanner('OPENING_BELL', false)}
+            onClick={() => handleRunScanner('OPENING_BELL')}
             disabled={isScanning}
             className="px-3 py-1.5 text-xs font-bold bg-neutral-900 hover:bg-neutral-850 text-white border border-neutral-800 rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
           >
@@ -672,7 +635,7 @@ export default function DashboardPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>مسح الافتتاح...</span>
+                <span>إرسال طلب المسح...</span>
               </>
             ) : (
               <span>⚡ رادار الافتتاح</span>
@@ -681,7 +644,7 @@ export default function DashboardPage() {
 
           {/* Macro Scan Button */}
           <button
-            onClick={() => handleRunScanner('MACRO_SCAN', false)}
+            onClick={() => handleRunScanner('MACRO_SCAN')}
             disabled={isScanning}
             className="px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-neutral-200 border border-white rounded transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-sans"
           >
@@ -691,7 +654,7 @@ export default function DashboardPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>تحليل الفرص الكبرى...</span>
+                <span>إرسال طلب المسح...</span>
               </>
             ) : (
               <span>🏛️ مسح الفرص الكبرى</span>
