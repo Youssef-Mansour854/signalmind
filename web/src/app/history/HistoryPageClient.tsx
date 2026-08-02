@@ -12,7 +12,7 @@ interface SignalItem {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired' | 'SUCCESS' | 'FAILED';
+  status: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'EXECUTED' | 'HIT_TP' | 'HIT_SL' | 'INVALIDATED' | 'SUCCESS' | 'FAILED';
   expiresAt?: string;
   exitPrice?: number;
   timeframe?: string;
@@ -44,7 +44,7 @@ interface UserTradeItem {
   exitPrice?: number;
   finalPnL?: number;
   pnlPercentage?: number;
-  status: 'ACTIVE' | 'OPEN' | 'Hit TP' | 'Hit SL' | 'CLOSED';
+  status: 'ACTIVE' | 'CLOSED' | 'HIT_TP' | 'HIT_SL';
   portfolioType: 'SYSTEM' | 'USER';
   executedAt: string;
   closedAt?: string;
@@ -278,9 +278,9 @@ export default function HistoryPage() {
   const getExitPrice = (signal: SignalItem) => {
     return signal.exitPrice !== undefined
       ? signal.exitPrice
-      : signal.status === 'Hit TP' || signal.status === 'SUCCESS'
+      : signal.status === 'HIT_TP' || signal.status === 'SUCCESS'
       ? signal.takeProfit
-      : signal.status === 'Hit SL' || signal.status === 'FAILED'
+      : signal.status === 'HIT_SL' || signal.status === 'FAILED'
       ? signal.stopLoss
       : signal.currentPrice;
   };
@@ -300,8 +300,8 @@ export default function HistoryPage() {
   };
 
   const getSignalStatusBadge = (status: string, pnl?: number) => {
-    const isWin = status === 'SUCCESS' || status === 'Hit TP' || (status === 'EXECUTED' && (pnl || 0) > 0);
-    const isLoss = status === 'FAILED' || status === 'Hit SL' || (status === 'EXECUTED' && (pnl || 0) <= 0);
+    const isWin = status === 'SUCCESS' || status === 'HIT_TP' || status === 'Hit TP' || (status === 'EXECUTED' && (pnl || 0) > 0);
+    const isLoss = status === 'FAILED' || status === 'HIT_SL' || status === 'Hit SL' || (status === 'EXECUTED' && (pnl || 0) <= 0);
     const isExpired = status === 'EXPIRED' || status === 'Expired';
 
     if (isWin) {
@@ -439,9 +439,9 @@ export default function HistoryPage() {
 
       {/* Main Tab 1: Platform Signals History */}
       {mainTab === 'signals' && (() => {
-        const winsCount = signalStats.winsCount ?? signals.filter(t => (t.status as string) === 'WIN' || t.status === 'SUCCESS' || t.status === 'Hit TP' || (t.status === 'EXECUTED' && (t.pnlPercentage || 0) > 0)).length;
-        const lossesCount = signalStats.lossesCount ?? signals.filter(t => (t.status as string) === 'LOSS' || t.status === 'FAILED' || t.status === 'Hit SL' || (t.status === 'EXECUTED' && (t.pnlPercentage || 0) <= 0)).length;
-        const expiredCount = signalStats.expiredCount ?? signals.filter(t => t.status === 'EXPIRED' || t.status === 'Expired').length;
+        const winsCount = signalStats.winsCount ?? signals.filter(t => (t.status as string) === 'WIN' || t.status === 'SUCCESS' || t.status === 'HIT_TP' || (t.status === 'EXECUTED' && (t.pnlPercentage || 0) > 0)).length;
+        const lossesCount = signalStats.lossesCount ?? signals.filter(t => (t.status as string) === 'LOSS' || t.status === 'FAILED' || t.status === 'HIT_SL' || (t.status === 'EXECUTED' && (t.pnlPercentage || 0) <= 0)).length;
+        const expiredCount = signalStats.expiredCount ?? signals.filter(t => t.status === 'EXPIRED').length;
 
         return (
         <div className="space-y-6">
@@ -541,7 +541,7 @@ export default function HistoryPage() {
                       const isStrong = trade.signalStrength === 'قوية';
                       const exitPrice = getExitPrice(trade);
                       const pnl = trade.pnlPercentage !== undefined ? trade.pnlPercentage : 0;
-                      const isWin = trade.status === 'SUCCESS' || trade.status === 'Hit TP' || (trade.status === 'EXECUTED' && pnl > 0);
+                      const isWin = trade.status === 'SUCCESS' || trade.status === 'HIT_TP' || (trade.status === 'EXECUTED' && pnl > 0);
 
                       return (
                         <tr
@@ -628,7 +628,7 @@ export default function HistoryPage() {
                   const isStrong = trade.signalStrength === 'قوية';
                   const exitPrice = getExitPrice(trade);
                   const pnl = trade.pnlPercentage !== undefined ? trade.pnlPercentage : 0;
-                  const isWin = trade.status === 'SUCCESS' || trade.status === 'Hit TP' || (trade.status === 'EXECUTED' && pnl > 0);
+                  const isWin = trade.status === 'SUCCESS' || trade.status === 'HIT_TP' || (trade.status === 'EXECUTED' && pnl > 0);
 
                   return (
                     <div
@@ -804,7 +804,7 @@ export default function HistoryPage() {
                         ? trade.pnlPercentage
                         : (entry > 0 ? ((exit - entry) / entry) * 100 : 0);
 
-                      const isWin = pnl > 0 || trade.status === 'Hit TP';
+                      const isWin = pnl > 0 || trade.status === 'HIT_TP';
 
                       return (
                         <tr
@@ -891,7 +891,7 @@ export default function HistoryPage() {
                     ? trade.pnlPercentage
                     : (entry > 0 ? ((exit - entry) / entry) * 100 : 0);
 
-                  const isWin = pnl > 0 || trade.status === 'Hit TP';
+                  const isWin = pnl > 0 || trade.status === 'HIT_TP';
 
                   return (
                     <div

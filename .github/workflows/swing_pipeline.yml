@@ -1,0 +1,57 @@
+name: SignalMind Swing Trading Pipeline
+
+on:
+  schedule:
+    - cron: "0 20 * * 5"  # US Market Close: Summer / EDT (4:00 PM NY = 20:00 UTC)
+    - cron: "0 21 * * 5"  # US Market Close: Winter / EST (4:00 PM NY = 21:00 UTC)
+  workflow_dispatch:
+    inputs:
+      market:
+        description: 'Market to analyze'
+        required: true
+        default: 'US'
+        type: choice
+        options:
+          - US
+      trade_type:
+        description: 'Swing trade duration type'
+        required: true
+        default: 'SWING_MONTHLY'
+        type: choice
+        options:
+          - SWING_MONTHLY
+          - SWING_YEAR_END
+
+concurrency:
+  group: swing-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  swing_analysis:
+    name: Weekly Swing Market Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEYS }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Update Open Position Prices First
+        run: python src/price_updater.py
+      - name: Run Swing Monthly Analysis
+        run: python -m src.swing_main --market US --trade_type SWING_MONTHLY
+      - name: Run Swing Year-End Analysis
+        run: python -m src.swing_main --market US --trade_type SWING_YEAR_END
+      - name: Track Portfolio Positions
+        run: python src/trade_tracker.py

@@ -52,8 +52,8 @@ def check_sharia_compliance(symbol: str, db: Any = None) -> Tuple[bool, str]:
     time.sleep(0.5)
 
     if not info or not isinstance(info, dict):
-        reason = "Sharia check unavailable - missing financial data"
-        _cache_result(db, symbol, False, None, None, reason, now)
+        reason = "[CHECK_FAILED_WILL_RETRY] Transient API failure or rate-limit - missing info dictionary"
+        # DO NOT CACHE TRANSIENT API FAILURES
         return False, reason
 
     market_cap = info.get("marketCap")
@@ -62,8 +62,8 @@ def check_sharia_compliance(symbol: str, db: Any = None) -> Tuple[bool, str]:
 
     # Safe missing data handling (TypeError prevention & safe rejection)
     if market_cap is None or total_debt is None or total_cash is None:
-        reason = f"Sharia check unavailable - missing financial data (MarketCap: {market_cap}, Debt: {total_debt}, Cash: {total_cash})"
-        _cache_result(db, symbol, False, None, None, reason, now)
+        reason = f"[CHECK_FAILED_WILL_RETRY] Transient API missing fields (MarketCap: {market_cap}, Debt: {total_debt}, Cash: {total_cash})"
+        # DO NOT CACHE TRANSIENT MISSING DATA
         return False, reason
 
     try:
@@ -72,30 +72,28 @@ def check_sharia_compliance(symbol: str, db: Any = None) -> Tuple[bool, str]:
         total_cash = float(total_cash)
 
         if market_cap <= 0:
-            reason = "Sharia check unavailable - non-positive market cap"
-            _cache_result(db, symbol, False, None, None, reason, now)
+            reason = "[CHECK_FAILED_WILL_RETRY] Non-positive market cap returned by API"
             return False, reason
 
         debt_ratio = round(total_debt / market_cap, 4)
         cash_ratio = round(total_cash / market_cap, 4)
 
         if debt_ratio > 0.33:
-            reason = f"Non-compliant Debt ratio ({debt_ratio * 100:.2f}% > 33.0%)"
+            reason = f"[NON-COMPLIANT] Debt ratio ({debt_ratio * 100:.2f}% > 33.0%)"
             _cache_result(db, symbol, False, debt_ratio, cash_ratio, reason, now)
             return False, reason
 
         if cash_ratio > 0.33:
-            reason = f"Non-compliant Cash ratio ({cash_ratio * 100:.2f}% > 33.0%)"
+            reason = f"[NON-COMPLIANT] Cash ratio ({cash_ratio * 100:.2f}% > 33.0%)"
             _cache_result(db, symbol, False, debt_ratio, cash_ratio, reason, now)
             return False, reason
 
-        reason = f"Compliant (Debt: {debt_ratio * 100:.2f}%, Cash: {cash_ratio * 100:.2f}%)"
+        reason = f"[COMPLIANT] Debt: {debt_ratio * 100:.2f}%, Cash: {cash_ratio * 100:.2f}%"
         _cache_result(db, symbol, True, debt_ratio, cash_ratio, reason, now)
         return True, reason
 
     except (TypeError, ValueError, ZeroDivisionError) as e:
-        reason = f"Sharia check unavailable - calculation error ({e})"
-        _cache_result(db, symbol, False, None, None, reason, now)
+        reason = f"[CHECK_FAILED_WILL_RETRY] Calculation error ({e})"
         return False, reason
 
 def _cache_result(db: Any, symbol: str, is_compliant: bool, debt_ratio: Optional[float], cash_ratio: Optional[float], reason: str, now: datetime.datetime):

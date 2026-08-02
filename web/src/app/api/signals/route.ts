@@ -29,6 +29,17 @@ export async function GET(request: Request) {
     const timeframe = searchParams.get('timeframe');
     if (timeframe) query.timeframe = timeframe;
     
+    const tradeType = searchParams.get('tradeType');
+    if (tradeType && tradeType.toUpperCase() !== 'ALL') {
+      query.tradeType = tradeType;
+    } else if (!tradeType) {
+      query.$or = [
+        { tradeType: 'DAY_TRADE' },
+        { tradeType: { $exists: false } },
+        { tradeType: null }
+      ];
+    }
+    
     // 2. Status check: support 'all', specific statuses, or default to active
     if (status === 'all' || status === 'All' || status === 'ALL') {
       // Do not filter by query.status so all statuses are returned

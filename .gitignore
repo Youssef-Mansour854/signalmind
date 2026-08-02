@@ -13,5 +13,7 @@ __pycache__/
 web/node_modules/
 web/.next/
 
-# Logs
+# Logs, Scratch and Backups
 *.txt
+scratch/
+backups/

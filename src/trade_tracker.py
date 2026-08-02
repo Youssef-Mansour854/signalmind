@@ -38,6 +38,18 @@ def connect_to_mongodb_with_retry(db_uri: str, max_retries: int = 3, initial_del
 db_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
 db_client = connect_to_mongodb_with_retry(db_uri)
 
+def evaluate_trade_outcome(trade: dict) -> tuple:
+    """
+    Returns (is_win: bool, pnl: float) consistently for any closed trade object
+    (whether from signals collection or user_portfolio collection).
+    """
+    pnl = float(trade.get("finalPnL") or trade.get("itemPnL") or trade.get("realizedPnL") or trade.get("pnlPercentage") or 0.0)
+    status = str(trade.get("status", "")).upper()
+    close_reason = str(trade.get("closeReason", "")).upper()
+    
+    is_win = (pnl > 0) or ("HIT_TP" in status) or ("HIT TP" in status) or ("SUCCESS" in status) or ("TP HIT" in close_reason)
+    return is_win, pnl
+
 class AsyncTradeTracker:
     def __init__(self, db_uri=None, db_name="signalmind"):
         self.db_uri = db_uri or os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
@@ -246,7 +258,6 @@ class AsyncTradeTracker:
             "status": {"$regex": "^(hit_tp|hit_sl|expired|executed|success|failed|closed)$", "$options": "i"}
         }
         closed_trades = list(portfolio_col.find(closed_query))
-        closed_trades = list(portfolio_col.find(closed_query))
 
         if not closed_trades:
             stats = {
@@ -275,10 +286,8 @@ class AsyncTradeTracker:
         gross_loss = 0.0
 
         for trade in closed_trades:
-            pnl = float(trade.get("finalPnL") or trade.get("itemPnL") or trade.get("realizedPnL") or 0.0)
-            status = str(trade.get("status", "")).upper()
-
-            if pnl > 0 or "HIT TP" in status or "SUCCESS" in status:
+            is_win, pnl = evaluate_trade_outcome(trade)
+            if is_win:
                 wins += 1
                 gross_profit += max(0.0, pnl)
             else:

@@ -168,6 +168,88 @@ class GroqAnalyst:
         """
         return prompt
 
+    def generate_swing_prompt(self, stock_data: Dict[str, Any], target_trade_type: str = "SWING_MONTHLY") -> str:
+        """Constructs prompt for Weekly & Long-Term Swing Trading setups."""
+        symbol = stock_data['symbol']
+        timeframe_label = "شهري" if target_trade_type == "SWING_MONTHLY" else "استثمار سنوي"
+
+        prompt = f"""
+        Analyze the following WEEKLY technical indicators for the stock {symbol}:
+        Current Price: {stock_data['close']}
+        Calculated Entry Price: {stock_data.get('entry_price')}
+        Calculated Stop Loss: {stock_data.get('stop_loss')}
+        Calculated Take Profit: {stock_data.get('take_profit')}
+        Weekly RSI (14): {stock_data.get('weekly_rsi')}
+        Weekly MACD Line: {stock_data.get('weekly_macd_line')}
+        Weekly MACD Signal: {stock_data.get('weekly_macd_signal')}
+        Weekly MACD Hist: {stock_data.get('weekly_macd_hist')}
+        Weekly SMA (20): {stock_data.get('weekly_sma_20')}
+        Weekly SMA (50): {stock_data.get('weekly_sma_50')}
+        Weekly SMA (200): {stock_data.get('weekly_sma_200')}
+        Weekly ATR (14): {stock_data.get('weekly_atr')}
+        6-Month Support: {stock_data.get('support_6m')}
+        6-Month Resistance: {stock_data.get('resistance_6m')}
+
+        You are an expert quantitative macro swing analyst evaluating medium-to-long term structural trends.
+        Focus on evaluating the weekly trend health, multi-week/month continuation potential, and risk/reward suitability for a {timeframe_label} position.
+
+        IMPORTANT:
+        The entry_price ({stock_data.get('entry_price')}), stop_loss ({stock_data.get('stop_loss')}), and take_profit ({stock_data.get('take_profit')}) have been calculated mathematically by quantitative models. DO NOT recalculate or modify these numbers. Output them exactly as given.
+
+        Provide your analysis in the exact JSON format below. DO NOT output any markdown, only valid JSON.
+
+        {{
+            "signal": "BUY" | "SELL" | "HOLD",
+            "entry_price": {stock_data.get('entry_price')},
+            "take_profit": {stock_data.get('take_profit')},
+            "stop_loss": {stock_data.get('stop_loss')},
+            "reasoning_ar": "تحليل أسبوعي مخصص من 3-4 أسطر بالعربي يشرح قوة الاتجاه الأسبوعي وهيكل الحركة على المدى الأطول",
+            "timeframe": "{timeframe_label}",
+            "signal_strength": "قوية" | "متوسطة"
+        }}
+        """
+        return prompt
+
+    async def analyze_swing(self, stock_data: Dict[str, Any], session, target_trade_type: str = "SWING_MONTHLY") -> Dict[str, Any]:
+        """
+        Stage 2 Swing Deep Analysis: Calls Groq API using fortified _call_groq with weekly macro prompt.
+        """
+        system_prompt = "You are an expert AI stock analyst specializing in weekly swing and long-term trend trading. You must always output ONLY valid JSON with no markdown."
+        user_prompt = self.generate_swing_prompt(stock_data, target_trade_type)
+        
+        model_name = getattr(self.config, "GROQ_MODEL", "llama-3.3-70b-versatile")
+        analysis = await self._call_groq(system_prompt, user_prompt, model_name, session)
+
+        if not analysis or not isinstance(analysis, dict):
+            print(f"[ERROR] Stage 2 swing deep analysis returned empty or invalid output for {stock_data.get('symbol')}.")
+            return None
+
+        # Strict 100% Python Override for Trading Levels
+        if 'entry_price' in stock_data:
+            analysis['entry_price'] = stock_data['entry_price']
+        if 'stop_loss' in stock_data:
+            analysis['stop_loss'] = stock_data['stop_loss']
+        if 'take_profit' in stock_data:
+            analysis['take_profit'] = stock_data['take_profit']
+
+        if "reasoning_ar" in analysis and "explanation_arabic" not in analysis:
+            analysis["explanation_arabic"] = analysis["reasoning_ar"]
+
+        timeframe_label = "شهري" if target_trade_type == "SWING_MONTHLY" else "استثمار سنوي"
+        analysis["timeframe"] = timeframe_label
+
+        if "signal_strength" not in analysis:
+            analysis["signal_strength"] = "متوسطة"
+        else:
+            strength_val = str(analysis["signal_strength"]).strip()
+            if strength_val not in ["قوية", "متوسطة"]:
+                analysis["signal_strength"] = "قوية" if "قو" in strength_val else "متوسطة"
+
+        signal_emoji = {"BUY": "🟢 BUY", "SELL": "🔴 SELL", "HOLD": "🟡 HOLD"}
+        analysis['signal_formatted'] = signal_emoji.get(analysis.get('signal', 'HOLD'), "🟡 HOLD")
+
+        return analysis
+
     def _safe_parse_json(self, response_text: str) -> Any:
         """Unified helper to safely parse JSON object or array response with regex fallback."""
         if not response_text:

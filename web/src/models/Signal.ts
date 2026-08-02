@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ISignal extends Document {
   symbol: string;
   market: 'US' | 'EGX';
+  tradeType?: 'DAY_TRADE' | 'SWING_MONTHLY' | 'SWING_YEAR_END';
   signalType: 'BUY' | 'SELL' | 'HOLD';
   
   // Price points
@@ -14,7 +15,7 @@ export interface ISignal extends Document {
   maxPriceReached: number;
   
   // Status and tracking
-  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired' | 'SUCCESS' | 'FAILED';
+  status: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'EXECUTED' | 'HIT_TP' | 'HIT_SL' | 'INVALIDATED';
   expiresAt?: Date;
   exitPrice?: number;
   isNearTP: boolean; // Flagged when price reaches 90% towards TP
@@ -63,12 +64,25 @@ export interface ISignal extends Document {
   timeframe?: string;
   signalStrength?: 'قوية' | 'متوسطة';
   closeReason?: string;
+
+  // Feature Snapshot at creation time for Performance Review & Filter Optimization
+  featureSnapshot?: {
+    generationSource: 'main_pipeline' | 'quick_scan_api';
+    quickScreenScore?: number;
+    stage2Confidence?: 'High' | 'Medium' | 'Low';
+    rsi?: number;
+    weeklyTrend?: 'BULLISH' | 'NEUTRAL' | 'BEARISH';
+    rrr?: number;
+    shariaDebtRatio?: number;
+    volumeAvg?: number;
+  };
 }
 
 const SignalSchema = new Schema<ISignal>(
   {
     symbol: { type: String, required: true, index: true },
     market: { type: String, enum: ['US', 'EGX'], required: true, index: true },
+    tradeType: { type: String, enum: ['DAY_TRADE', 'SWING_MONTHLY', 'SWING_YEAR_END'], default: 'DAY_TRADE', index: true },
     signalType: { type: String, enum: ['BUY', 'SELL', 'HOLD'], required: true, index: true },
     entryPrice: { type: Number, required: true },
     actualEntryPrice: { type: Number },
@@ -78,7 +92,7 @@ const SignalSchema = new Schema<ISignal>(
     maxPriceReached: { type: Number, default: 0 },
     status: { 
       type: String, 
-      enum: ['ACTIVE', 'EXPIRED', 'EXECUTED', 'Pending', 'Active', 'Hit TP', 'Hit SL', 'Expired', 'SUCCESS', 'FAILED'], 
+      enum: ['ACTIVE', 'PENDING', 'EXPIRED', 'EXECUTED', 'HIT_TP', 'HIT_SL', 'INVALIDATED'], 
       default: 'ACTIVE',
       index: true 
     },
@@ -119,7 +133,17 @@ const SignalSchema = new Schema<ISignal>(
     },
     timeframe: { type: String },
     signalStrength: { type: String },
-    closeReason: { type: String }
+    closeReason: { type: String },
+    featureSnapshot: {
+      generationSource: { type: String, enum: ['main_pipeline', 'quick_scan_api'], default: 'main_pipeline' },
+      quickScreenScore: Number,
+      stage2Confidence: String,
+      rsi: Number,
+      weeklyTrend: String,
+      rrr: Number,
+      shariaDebtRatio: Number,
+      volumeAvg: Number
+    }
   },
   { timestamps: true }
 );

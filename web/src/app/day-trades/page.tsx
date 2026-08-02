@@ -12,7 +12,7 @@ interface Signal {
   stopLoss: number;
   takeProfit: number;
   currentPrice: number;
-  status: 'ACTIVE' | 'EXPIRED' | 'EXECUTED' | 'Pending' | 'Active' | 'Hit TP' | 'Hit SL' | 'Expired';
+  status: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'EXECUTED' | 'HIT_TP' | 'HIT_SL' | 'INVALIDATED';
   expiresAt?: string;
   exitPrice?: number;
   timeframe?: string;
@@ -37,7 +37,7 @@ interface PortfolioItem {
   actualEntryPrice: number;
   positionSize: number;
   quantity?: number;
-  status: 'ACTIVE' | 'CLOSED_WIN' | 'CLOSED_LOSS' | 'Hit TP' | 'Hit SL' | 'CLOSED';
+  status: 'ACTIVE' | 'CLOSED' | 'HIT_TP' | 'HIT_SL';
   executedAt: string;
   currentPrice?: number;
   currentPnL?: number;
@@ -143,7 +143,7 @@ export default function DayTradesPage() {
     setError(null);
     try {
       const [signalsRes, portfolioRes] = await Promise.all([
-        fetch(`/api/signals?status=Active&limit=100&market=${marketFilter}&timeframe=${encodeURIComponent('يومي')}`),
+        fetch(`/api/signals?status=ACTIVE&limit=100&market=${marketFilter}&timeframe=${encodeURIComponent('يومي')}`),
         fetch(`/api/portfolio`)
       ]);
       
@@ -646,8 +646,8 @@ export default function DayTradesPage() {
                   className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs focus:outline-none focus:border-white cursor-pointer"
                 >
                   <option value="Manual Close">إغلاق يدوي (Manual Close)</option>
-                  <option value="Hit TP">تحقيق الهدف الثاني (Hit TP)</option>
-                  <option value="Hit SL">ضرب وقف الخسارة (Hit SL)</option>
+                  <option value="HIT_TP">تحقيق الهدف الثاني (Hit TP)</option>
+                  <option value="HIT_SL">ضرب وقف الخسارة (Hit SL)</option>
                   <option value="Time Exit">خروج زمني (Time Exit)</option>
                 </select>
               </div>

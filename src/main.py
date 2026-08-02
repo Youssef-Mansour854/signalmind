@@ -364,6 +364,9 @@ async def main_async():
                     if close_price >= acceptable_entry_min:
                         status = "ACTIVE"
 
+                rrr_val = round((take_profit - entry_price) / max(entry_price - stop_loss, 0.0001), 2)
+                weekly_trend_str = "BEARISH" if analyzer.is_in_weekly_downtrend(stock_data) else "BULLISH"
+
                 signal_doc = {
                     "symbol": symbol,
                     "market": market,
@@ -384,6 +387,16 @@ async def main_async():
                     "currency": currency,
                     "timeframe": timeframe,
                     "signalStrength": signal_strength,
+                    "featureSnapshot": {
+                        "generationSource": "main_pipeline",
+                        "quickScreenScore": screen_res.get("score"),
+                        "stage2Confidence": ai_confidence,
+                        "rsi": stock_data.get("rsi"),
+                        "weeklyTrend": weekly_trend_str,
+                        "rrr": rrr_val,
+                        "shariaDebtRatio": stock_data.get("sharia_debt_ratio", 0.0),
+                        "volumeAvg": stock_data.get("volume_avg", 0)
+                    },
                     "createdAt": now,
                     "updatedAt": now
                 }

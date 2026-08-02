@@ -259,6 +259,13 @@ ${timeframePromptContext}
         totalScore: 75,
         rank: 999,
       },
+      featureSnapshot: {
+        generationSource: 'quick_scan_api',
+        stage2Confidence: parsed.aiConfidence || 'Medium',
+        rsi: latestRSI,
+        rrr: Number(rrr.toFixed(2)),
+        volumeAvg: volAvg
+      },
       createdAt,
       updatedAt: createdAt,
     });

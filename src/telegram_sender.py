@@ -117,20 +117,28 @@ class TelegramSender:
 ---"""
         return self.send_message(text)
 
-    def send_top_signals_aggregated(self, top_signals: list) -> bool:
-        """Aggregates Top 5 signals into ONE single formatted Telegram message per run."""
-        if not self.has_credentials():
-            print("[INFO] Telegram credentials not found. Skipping aggregated Telegram alert.")
-            return True
-
+    def send_top_signals_aggregated(self, top_signals: list, trade_type: str = "DAY_TRADE") -> str:
+        """Aggregates Top 5 signals into ONE single formatted Telegram message per run with tradeType branding."""
         if not top_signals:
-            return True
+            return ""
 
         cairo_time = datetime.datetime.now(cairo_tz)
         time_str = cairo_time.strftime("%Y-%m-%d %H:%M")
 
+        # Determine header based on trade_type
+        if trade_type == "SWING_MONTHLY":
+            header_title = "📅 <b>SignalMind Swing Trading (توصيات أسبوعية / شهري)</b> 📈"
+            type_note = "⚠️ <i>صفقات سوانج أسبوعية (أسابيع لشهري) - وقف خسارة أوسع وأهداف أبعد</i>"
+        elif trade_type == "SWING_YEAR_END":
+            header_title = "🏢 <b>SignalMind Long-Term (استثمار سنوي)</b> 🎯"
+            type_note = "⚠️ <i>صفقات استثمارية طويلة المدى (أشهر إلى سنة)</i>"
+        else:
+            header_title = "⚡ <b>SignalMind Day Trading (توصيات يومية)</b> 🚀"
+            type_note = "⚡ <i>صفقات مضاربة يومية - أهداف سريعة ووقف خسارة ضيق</i>"
+
         lines = [
-            "🏆 <b>SignalMind Top 5 Quantitative Opportunities</b> 🚀",
+            header_title,
+            type_note,
             f"⏰ <i>{time_str}</i> (Cairo Time)",
             "----------------------------------------"
         ]
@@ -138,25 +146,31 @@ class TelegramSender:
         for idx, sig in enumerate(top_signals, 1):
             symbol = html.escape(str(sig.get('symbol', 'UNKNOWN')))
             market = html.escape(str(sig.get('market', 'US')))
-            signal_type = html.escape(str(sig.get('signalType', 'BUY')))
-            entry = html.escape(str(sig.get('entryPrice', 0)))
-            tp = html.escape(str(sig.get('takeProfit', 0)))
-            sl = html.escape(str(sig.get('stopLoss', 0)))
-            score = html.escape(str(sig.get('scoreMetrics', {}).get('totalScore', 0)))
-            timeframe = html.escape(str(sig.get('timeframe', 'يومي')))
-            curr = "ج.م" if sig.get('market') == "EGX" or str(sig.get('symbol', '')).endswith(".CA") else "$"
+            signal_type = html.escape(str(sig.get('signalType', sig.get('signal', 'BUY'))))
+            entry = html.escape(str(sig.get('entryPrice', sig.get('entry_price', 0))))
+            tp = html.escape(str(sig.get('takeProfit', sig.get('take_profit', 0))))
+            sl = html.escape(str(sig.get('stopLoss', sig.get('stop_loss', 0))))
+            score = html.escape(str(sig.get('scoreMetrics', {}).get('totalScore', 85)))
+            timeframe = html.escape(str(sig.get('timeframe', 'شهري' if trade_type == 'SWING_MONTHLY' else 'يومي')))
+            explanation = html.escape(str(sig.get('explanationArabic', sig.get('explanation_arabic', sig.get('reasoning_ar', '')))))
+            curr = "ج.م" if market == "EGX" or str(symbol).endswith(".CA") else "$"
 
             lines.append(
                 f"<b>#{idx} {symbol}</b> ({market}) - 🟢 <b>{signal_type}</b>\n"
-                f"📈 <b>Score:</b> {score}/100 | ⏱ <b>Timeframe:</b> {timeframe}\n"
+                f"📈 <b>Score:</b> {score}/100 | ⏱ <b>المدى الزمني:</b> {timeframe}\n"
                 f"💰 <b>Entry:</b> {curr}{entry} | 🎯 <b>TP:</b> {curr}{tp} | 🛡️ <b>SL:</b> {curr}{sl}\n"
+                f"📝 {explanation}\n"
             )
 
         lines.append("----------------------------------------")
         lines.append(html.escape(str(self.config.DISCLAIMER_TEXT)))
 
         full_message = "\n".join(lines)
-        return self.send_message(full_message)
+
+        if self.has_credentials():
+            self.send_message(full_message)
+
+        return full_message
 
     def send_error_alert(self, total: int, failed: int, details: str = "") -> bool:
         """Sends an alert if failure threshold is reached."""
