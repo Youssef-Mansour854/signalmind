@@ -2,9 +2,19 @@
 import asyncio
 import datetime
 import os
+import sys
 import yfinance as yf
+import pandas as pd
 from pymongo import MongoClient
 from dotenv import load_dotenv
+
+# Ensure src directory is in import path
+src_dir = os.path.dirname(os.path.abspath(__file__))
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+import config
+from telegram_sender import TelegramSender
 
 # Load environmental variables
 load_dotenv()
@@ -50,6 +60,36 @@ def evaluate_trade_outcome(trade: dict) -> tuple:
     is_win = (pnl > 0) or ("HIT_TP" in status) or ("HIT TP" in status) or ("SUCCESS" in status) or ("TP HIT" in close_reason)
     return is_win, pnl
 
+def send_instant_exit_notification(symbol: str, exit_reason: str, entry_price: float, current_price: float, pnl_pct: float) -> bool:
+    """Sends an instant, urgent Telegram alert when an active portfolio trade hits TP or SL."""
+    try:
+        telegram = TelegramSender(config)
+        if not telegram.has_credentials():
+            print(f"[INSTANT TELEGRAM] Skipped for {symbol}: Telegram credentials missing.")
+            return False
+
+        pnl_sign = "+" if pnl_pct > 0 else ""
+        if "TP" in exit_reason.upper() and "BE" not in exit_reason.upper():
+            title = f"🚨 <b>بيع الآن - {symbol} ضرب الهدف (Take Profit)</b>"
+        else:
+            title = f"⛔ <b>بيع الآن - {symbol} ضرب وقف الخسارة (Stop Loss)</b>"
+
+        message = (
+            f"{title}\n"
+            f"سعر الدخول: ${entry_price:.2f} | السعر الحالي: ${current_price:.2f} ({pnl_sign}{pnl_pct:.2f}%)\n"
+            f"ده وقت البيع المقترح."
+        )
+
+        success = telegram.send_message(message)
+        if success:
+            print(f"[INSTANT TELEGRAM] Exit notification sent successfully for {symbol} ({exit_reason})")
+        else:
+            print(f"[INSTANT TELEGRAM ERROR] Failed to send exit notification for {symbol}")
+        return success
+    except Exception as e:
+        print(f"[INSTANT TELEGRAM EXCEPTION] {symbol}: {e}")
+        return False
+
 class AsyncTradeTracker:
     def __init__(self, db_uri=None, db_name="signalmind"):
         self.db_uri = db_uri or os.environ.get("MONGODB_URI", "mongodb://localhost:27017/signalmind")
@@ -67,6 +107,30 @@ class AsyncTradeTracker:
             return self._db_client["signalmind"]
 
     async def run_tracking_cycle(self):
+        # DST Time Guard for US Market Trading Hours Alignment
+        is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+        market_target = os.environ.get("MARKET_TARGET", "US")
+        force_run = os.environ.get("FORCE_TRACKER", "false").lower() in ("true", "1")
+
+        if is_scheduled and market_target == "US" and not force_run:
+            try:
+                from zoneinfo import ZoneInfo
+                ny_now = datetime.datetime.now(ZoneInfo("America/New_York"))
+            except Exception:
+                import pytz
+                ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
+
+            ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
+            ny_minutes = ny_now.hour * 60 + ny_now.minute
+
+            # US Market regular trading hours window: 09:20 AM to 04:10 PM NY Time
+            market_open_min = 9 * 60 + 20   # 9:20 AM
+            market_close_min = 16 * 60 + 10  # 4:10 PM
+
+            if not (market_open_min <= ny_minutes <= market_close_min):
+                print(f"[INFO] trade_tracker: Skipped - Outside US market trading hours (Current NY time: {ny_time_str}).")
+                return
+
         print("Starting async trade tracking cycle...")
         database = self.db
         if database is None:
@@ -137,14 +201,19 @@ class AsyncTradeTracker:
             stop_loss = trade.get("stopLoss") or (signal_doc.get("stopLoss") if signal_doc else None)
 
             try:
-                if len(symbols) == 1:
-                    current_price = data["Close"].dropna().iloc[-1]
-                    high_price = data["High"].dropna().iloc[-1]
-                    low_price = data["Low"].dropna().iloc[-1]
+                if isinstance(data.columns, pd.MultiIndex):
+                    if symbol in data.columns.get_level_values(0):
+                        ticker_df = data[symbol]
+                    else:
+                        ticker_df = data
+                elif symbol in data:
+                    ticker_df = data[symbol]
                 else:
-                    current_price = data[symbol]["Close"].dropna().iloc[-1]
-                    high_price = data[symbol]["High"].dropna().iloc[-1]
-                    low_price = data[symbol]["Low"].dropna().iloc[-1]
+                    ticker_df = data
+
+                current_price = ticker_df["Close"].dropna().iloc[-1]
+                high_price = ticker_df["High"].dropna().iloc[-1]
+                low_price = ticker_df["Low"].dropna().iloc[-1]
             except Exception as e:
                 print(f"Failed to extract price data for {symbol}: {e}")
                 continue
@@ -200,13 +269,37 @@ class AsyncTradeTracker:
                 update_fields["closedAt"] = now
                 update_fields["closed_at"] = now
                 update_fields["closeReason"] = "TP Hit"
+                update_fields["notifiedAt"] = now
+                update_fields["telegramNotified"] = True
+
                 if entry_price:
                     update_fields["finalPnL"] = round((exit_val - entry_price) * quantity, 4)
-                    update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
+                    pnl_pct = round(((exit_val - entry_price) / entry_price) * 100, 2)
+                    update_fields["pnlPercentage"] = pnl_pct
+                else:
+                    pnl_pct = 0.0
 
-                await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
-                print(f"[TP HIT] Closed WIN for {symbol}: exit ${exit_val:.2f} >= TP ${take_profit}")
-                closed_wins += 1
+                # ATOMIC TRANSACTION CLAIM: find_one_and_update matching status='ACTIVE'
+                # Guarantees exactly ONE concurrent process/thread wins the claim
+                atomic_res = await asyncio.to_thread(
+                    portfolio_col.find_one_and_update,
+                    {
+                        "_id": trade["_id"],
+                        "status": {"$regex": "^active$", "$options": "i"}
+                    },
+                    {"$set": update_fields}
+                )
+
+                if atomic_res is not None:
+                    # Atomic claim succeeded for this thread! Send instant Telegram alert
+                    await asyncio.to_thread(
+                        send_instant_exit_notification,
+                        symbol, "HIT_TP", entry_price or 0.0, exit_val, pnl_pct
+                    )
+                    print(f"[TP HIT - ATOMIC WIN] Closed WIN for {symbol}: exit ${exit_val:.2f} >= TP ${take_profit}")
+                    closed_wins += 1
+                else:
+                    print(f"[RACE CONDITION DEFENSE] Trade {symbol} was already updated/closed by a concurrent execution. Skipped.")
 
             elif hit_sl:
                 exit_val = float(stop_loss)
@@ -218,17 +311,42 @@ class AsyncTradeTracker:
                 update_fields["closedAt"] = now
                 update_fields["closed_at"] = now
                 update_fields["closeReason"] = "TP Hit (BE)" if is_profitable else "SL Hit"
+                update_fields["notifiedAt"] = now
+                update_fields["telegramNotified"] = True
+
                 if entry_price:
                     update_fields["finalPnL"] = round((exit_val - entry_price) * quantity, 4)
-                    update_fields["pnlPercentage"] = round(((exit_val - entry_price) / entry_price) * 100, 2)
-
-                await asyncio.to_thread(portfolio_col.update_one, {"_id": trade["_id"]}, {"$set": update_fields})
-                if is_profitable:
-                    print(f"[SL HIT -> TP BE] Closed WIN (BE) for {symbol}: exit ${exit_val:.2f} > Entry ${entry_price:.2f}")
-                    closed_wins += 1
+                    pnl_pct = round(((exit_val - entry_price) / entry_price) * 100, 2)
+                    update_fields["pnlPercentage"] = pnl_pct
                 else:
-                    print(f"[SL HIT] Closed LOSS for {symbol}: exit ${exit_val:.2f} <= SL ${stop_loss}")
-                    closed_losses += 1
+                    pnl_pct = 0.0
+
+                # ATOMIC TRANSACTION CLAIM: find_one_and_update matching status='ACTIVE'
+                # Guarantees exactly ONE concurrent process/thread wins the claim
+                atomic_res = await asyncio.to_thread(
+                    portfolio_col.find_one_and_update,
+                    {
+                        "_id": trade["_id"],
+                        "status": {"$regex": "^active$", "$options": "i"}
+                    },
+                    {"$set": update_fields}
+                )
+
+                if atomic_res is not None:
+                    # Atomic claim succeeded for this thread! Send instant Telegram alert
+                    reason_code = "HIT_TP_BE" if is_profitable else "HIT_SL"
+                    await asyncio.to_thread(
+                        send_instant_exit_notification,
+                        symbol, reason_code, entry_price or 0.0, exit_val, pnl_pct
+                    )
+                    if is_profitable:
+                        print(f"[SL HIT -> TP BE - ATOMIC WIN] Closed WIN (BE) for {symbol}: exit ${exit_val:.2f} > Entry ${entry_price:.2f}")
+                        closed_wins += 1
+                    else:
+                        print(f"[SL HIT - ATOMIC WIN] Closed LOSS for {symbol}: exit ${exit_val:.2f} <= SL ${stop_loss}")
+                        closed_losses += 1
+                else:
+                    print(f"[RACE CONDITION DEFENSE] Trade {symbol} was already updated/closed by a concurrent execution. Skipped.")
 
             else:
                 # Keep active and update current price, currentPnL, and max price reached

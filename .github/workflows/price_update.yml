@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: price-update-pipeline-${{ github.ref }}
+  group: portfolio-tracker-pipeline-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
