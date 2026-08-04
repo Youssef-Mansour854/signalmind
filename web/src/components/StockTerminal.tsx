@@ -55,6 +55,8 @@ interface StockTerminalProps {
   initialPortfolioItem: PortfolioItem | null;
 }
 
+import { calculatePositionSize } from '@/lib/positionSizer';
+
 export default function StockTerminal({ signal: initialSignal, initialPortfolioItem }: StockTerminalProps) {
   const [signal, setSignal] = useState<Signal>(initialSignal);
   const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(initialPortfolioItem);
@@ -66,7 +68,14 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const [actualEntryPrice, setActualEntryPrice] = useState<number>(signal.entryPrice);
   const [positionSize, setPositionSize] = useState<string>('');
   const [execQuantity, setExecQuantity] = useState<string>('');
-  const [riskPercentage, setRiskPercentage] = useState<number>(1);
+  const [execLots, setExecLots] = useState<string>('');
+  const [riskPercentage, setRiskPercentage] = useState<number>(2);
+  const [riskSettings, setRiskSettings] = useState<{ riskPercent: number; contractSize: number; minVolume: number; volumeStep: number }>({
+    riskPercent: 2,
+    contractSize: 100,
+    minVolume: 0.01,
+    volumeStep: 0.01,
+  });
 
   const handleValueChange = (val: string) => {
     setPositionSize(val);
@@ -87,6 +96,18 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
       setPositionSize((numQty * numPrice).toFixed(2));
     } else {
       setPositionSize('');
+    }
+  };
+
+  const handleLotsChange = (val: string) => {
+    setExecLots(val);
+    const numLots = parseFloat(val);
+    const numPrice = typeof actualEntryPrice === 'number' ? actualEntryPrice : parseFloat(String(actualEntryPrice));
+    const contract = riskSettings.contractSize || 100;
+    if (numLots > 0 && numPrice > 0) {
+      const shares = numLots * contract;
+      setExecQuantity(shares.toString());
+      setPositionSize((shares * numPrice).toFixed(2));
     }
   };
 
@@ -126,10 +147,17 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   const fetchUserStats = async () => {
     setStatsLoading(true);
     try {
-      const res = await fetch('/api/portfolio/stats?type=USER');
-      const json = await res.json();
-      if (json.success && json.data) {
-        setUserStats(json.data);
+      const [statsRes, riskRes] = await Promise.all([
+        fetch('/api/portfolio/stats?type=USER&market=US'),
+        fetch('/api/settings/risk')
+      ]);
+      const jsonStats = await statsRes.json();
+      const jsonRisk = await riskRes.json();
+      if (jsonStats.success && jsonStats.data) {
+        setUserStats(jsonStats.data);
+      }
+      if (jsonRisk.success && jsonRisk.data) {
+        setRiskSettings(jsonRisk.data);
       }
     } catch (err) {
       console.error('Failed to fetch user stats in terminal:', err);
@@ -139,18 +167,33 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
   };
 
   useEffect(() => {
+    fetchUserStats();
+  }, []);
+
+  useEffect(() => {
     if (isExecModalOpen) {
       fetchUserStats();
       setStopLossPrice(signal.stopLoss);
     }
   }, [isExecModalOpen, signal.stopLoss]);
 
-  // Calculations
+  // Position Sizing Calculations based on Available Cash
+  const availableCash = userStats?.availableCash || 0;
   const totalPortfolioValue = userStats?.totalPortfolioValue || 100000;
   const riskAmount = totalPortfolioValue * (riskPercentage / 100);
   const priceRiskPerShare = Math.abs(actualEntryPrice - stopLossPrice);
   const calculatedQty = priceRiskPerShare > 0 ? Number((riskAmount / priceRiskPerShare).toFixed(4)) : 0;
   const calculatedPositionSize = Number((calculatedQty * actualEntryPrice).toFixed(2));
+
+  const posSizeRes = calculatePositionSize({
+    capital: availableCash > 0 ? availableCash : totalPortfolioValue,
+    riskPercent: riskSettings.riskPercent || 2,
+    entryPrice: signal.entryPrice,
+    stopLossPrice: signal.stopLoss,
+    contractSize: riskSettings.contractSize || 100,
+    minVolume: riskSettings.minVolume || 0.01,
+    volumeStep: riskSettings.volumeStep || 0.01,
+  });
 
   // Close Modal State
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -462,6 +505,20 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
               <span className="text-white font-bold">{signal.signalType}</span>
             </div>
           </div>
+
+          {/* Position Sizing Calculator Banner */}
+          <div className="border-t border-neutral-900 pt-3 text-right">
+            <span className="text-neutral-500 block text-[10px] font-mono mb-1">📐 حجم الصفقة المقترح (Headway MT5):</span>
+            {posSizeRes.available ? (
+              <span className="text-emerald-400 font-bold text-xs font-mono">
+                {posSizeRes.lotsNeeded} لوت (مخاطرة فعلية: ${posSizeRes.actualRiskAmount.toFixed(2)})
+              </span>
+            ) : (
+              <span className="text-amber-400 font-medium text-[11px] font-sans">
+                {posSizeRes.message}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* AI Analysis Panel */}
@@ -669,6 +726,32 @@ export default function StockTerminal({ signal: initialSignal, initialPortfolioI
                 </>
               ) : (
                 <>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-bold text-neutral-450 block">حجم الصفقة باللوت (Lots - Headway MT5)</label>
+                      {posSizeRes.available && (
+                        <button
+                          type="button"
+                          onClick={() => handleLotsChange(posSizeRes.lotsNeeded.toString())}
+                          className="text-[9px] text-emerald-400 hover:underline cursor-pointer font-mono"
+                        >
+                          تطبيق المقترح ({posSizeRes.lotsNeeded} لوت)
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder={posSizeRes.available ? `المقترح: ${posSizeRes.lotsNeeded} لوت` : '0.01'}
+                      value={execLots}
+                      onChange={(e) => handleLotsChange(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 text-white rounded p-2 text-xs font-mono focus:outline-none focus:border-white"
+                    />
+                    <p className={`text-[10px] mt-0.5 font-sans ${posSizeRes.available ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {posSizeRes.message}
+                    </p>
+                  </div>
+
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase font-bold text-neutral-450 block">الكمية (عدد الأسهم)</label>
                     <input

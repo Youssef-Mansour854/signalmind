@@ -117,6 +117,42 @@ class TelegramSender:
 ---"""
         return self.send_message(text)
 
+    def calculate_position_size_info(self, entry: float, sl: float, capital: float = 500.0, risk_percent: float = 2.0) -> str:
+        """Calculates lot size and risk info with safety guard for zero risk per share."""
+        try:
+            if not entry or not sl or entry <= 0 or sl <= 0:
+                return "بيانات السعر غير صالحة"
+            risk_per_share = abs(entry - sl)
+            if risk_per_share <= 0.00001:
+                return "بيانات السعر غير صالحة"
+            if not capital or capital <= 0:
+                return "الرصيد غير كافٍ"
+
+            contract_size = 100.0
+            min_volume = 0.01
+            volume_step = 0.01
+
+            target_risk_amount = capital * (risk_percent / 100.0)
+            shares_needed = target_risk_amount / risk_per_share
+            raw_lots = shares_needed / contract_size
+
+            import math
+            steps = math.floor((raw_lots + 1e-9) / volume_step)
+            lots_needed = round(max(0, steps * volume_step), 4)
+
+            min_shares = min_volume * contract_size
+            min_risk = min_shares * risk_per_share
+            min_capital_req = round(min_risk / (risk_percent / 100.0), 2)
+
+            if lots_needed < min_volume:
+                return f"غير متاح - الرصيد المطلوب ${min_capital_req:,.2f}"
+
+            actual_shares = lots_needed * contract_size
+            actual_risk = round(actual_shares * risk_per_share, 2)
+            return f"{lots_needed} لوت (مخاطرة فعلية: ${actual_risk:.2f})"
+        except Exception as e:
+            return "بيانات السعر غير صالحة"
+
     def send_top_signals_aggregated(self, top_signals: list, trade_type: str = "DAY_TRADE") -> str:
         """Aggregates Top 5 signals into ONE single formatted Telegram message per run with tradeType branding."""
         if not top_signals:
@@ -147,18 +183,21 @@ class TelegramSender:
             symbol = html.escape(str(sig.get('symbol', 'UNKNOWN')))
             market = html.escape(str(sig.get('market', 'US')))
             signal_type = html.escape(str(sig.get('signalType', sig.get('signal', 'BUY'))))
-            entry = html.escape(str(sig.get('entryPrice', sig.get('entry_price', 0))))
-            tp = html.escape(str(sig.get('takeProfit', sig.get('take_profit', 0))))
-            sl = html.escape(str(sig.get('stopLoss', sig.get('stop_loss', 0))))
+            entry = float(sig.get('entryPrice', sig.get('entry_price', 0)) or 0)
+            tp = float(sig.get('takeProfit', sig.get('take_profit', 0)) or 0)
+            sl = float(sig.get('stopLoss', sig.get('stop_loss', 0)) or 0)
             score = html.escape(str(sig.get('scoreMetrics', {}).get('totalScore', 85)))
             timeframe = html.escape(str(sig.get('timeframe', 'شهري' if trade_type == 'SWING_MONTHLY' else 'يومي')))
             explanation = html.escape(str(sig.get('explanationArabic', sig.get('explanation_arabic', sig.get('reasoning_ar', '')))))
             curr = "ج.م" if market == "EGX" or str(symbol).endswith(".CA") else "$"
 
+            lot_info = html.escape(self.calculate_position_size_info(entry, sl))
+
             lines.append(
                 f"<b>#{idx} {symbol}</b> ({market}) - 🟢 <b>{signal_type}</b>\n"
                 f"📈 <b>Score:</b> {score}/100 | ⏱ <b>المدى الزمني:</b> {timeframe}\n"
-                f"💰 <b>Entry:</b> {curr}{entry} | 🎯 <b>TP:</b> {curr}{tp} | 🛡️ <b>SL:</b> {curr}{sl}\n"
+                f"💰 <b>Entry:</b> {curr}{entry:.2f} | 🎯 <b>TP:</b> {curr}{tp:.2f} | 🛡️ <b>SL:</b> {curr}{sl:.2f}\n"
+                f"📐 <b>حجم الصفقة المقترح:</b> {lot_info}\n"
                 f"📝 {explanation}\n"
             )
 

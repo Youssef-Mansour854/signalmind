@@ -50,6 +50,8 @@ interface PortfolioItem {
   brokerFees?: number;
 }
 
+import { calculatePositionSize } from '@/lib/positionSizer';
+
 export default function SwingTradesPage() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
@@ -57,6 +59,8 @@ export default function SwingTradesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expiredCount, setExpiredCount] = useState<number>(0);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [riskSettings, setRiskSettings] = useState<any>({ riskPercent: 2, contractSize: 100, minVolume: 0.01, volumeStep: 0.01 });
 
   // Shared Live Price State Dictionary
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
@@ -142,13 +146,17 @@ export default function SwingTradesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [signalsRes, portfolioRes] = await Promise.all([
+      const [signalsRes, portfolioRes, statsRes, riskRes] = await Promise.all([
         fetch(`/api/signals?status=ACTIVE&limit=100&market=${marketFilter}&timeframe=${encodeURIComponent('أسبوعي')}&tradeType=SWING_MONTHLY`),
-        fetch(`/api/portfolio`)
+        fetch(`/api/portfolio`),
+        fetch(`/api/portfolio/stats?type=USER&market=${marketFilter}`),
+        fetch(`/api/settings/risk`)
       ]);
       
       const signalsJson = await signalsRes.json();
       const portfolioJson = await portfolioRes.json();
+      const statsJson = await statsRes.json();
+      const riskJson = await riskRes.json();
 
       if (signalsJson.success && portfolioJson.success) {
         setSignals(signalsJson.data);
@@ -156,6 +164,13 @@ export default function SwingTradesPage() {
         setPortfolio(portfolioJson.data);
       } else {
         setError(signalsJson.error || portfolioJson.error || 'فشل في تحميل البيانات');
+      }
+
+      if (statsJson.success && statsJson.data) {
+        setUserStats(statsJson.data);
+      }
+      if (riskJson.success && riskJson.data) {
+        setRiskSettings(riskJson.data);
       }
     } catch (err: any) {
       setError(err.message || 'حدث خطأ غير متوقع');
@@ -473,13 +488,24 @@ export default function SwingTradesPage() {
                   <th className="p-4">الهدف</th>
                   <th className="p-4">وقف الخسارة</th>
                   <th className="p-4">السعر الحالي</th>
-                  <th className="p-4" style={{ width: '35%' }}>التحليل الفني</th>
+                  <th className="p-4">حجم الصفقة (MT5)</th>
+                  <th className="p-4" style={{ width: '30%' }}>التحليل الفني</th>
                   <th className="p-4 text-center">الإجراء</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900/40">
                 {sortedSignals.map((signal) => {
                   const isStrong = signal.signalStrength === 'قوية';
+                  const availableCash = userStats?.availableCash || 0;
+                  const posRes = calculatePositionSize({
+                    capital: availableCash > 0 ? availableCash : (userStats?.totalPortfolioValue || 100000),
+                    riskPercent: riskSettings?.riskPercent || 2,
+                    entryPrice: signal.entryPrice,
+                    stopLossPrice: signal.stopLoss,
+                    contractSize: riskSettings?.contractSize || 100,
+                    minVolume: riskSettings?.minVolume || 0.01,
+                    volumeStep: riskSettings?.volumeStep || 0.01
+                  });
 
                   return (
                     <tr
@@ -518,6 +544,17 @@ export default function SwingTradesPage() {
                       </td>
                       <td className="p-4 font-mono font-bold">
                         {formatPrice(signal.currentPrice, signal.market, signal.symbol)}
+                      </td>
+                      <td className="p-4 font-mono text-[11px]">
+                        {posRes.available ? (
+                          <span className={isStrong ? 'text-emerald-800 font-bold' : 'text-emerald-400 font-bold'}>
+                            {posRes.lotsNeeded} لوت <span className="text-[9px] text-neutral-500 font-normal">(${posRes.actualRiskAmount})</span>
+                          </span>
+                        ) : (
+                          <span className={isStrong ? 'text-amber-900 font-medium' : 'text-amber-400 font-medium'} title={posRes.message}>
+                            غير متاح <span className="text-[9px] text-neutral-500 block">($${posRes.minCapitalRequired})</span>
+                          </span>
+                        )}
                       </td>
                       <td className={`p-4 leading-relaxed font-light ${isStrong ? 'text-neutral-800 font-medium' : 'text-neutral-400'}`}>
                         {signal.explanationArabic}
