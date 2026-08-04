@@ -64,8 +64,24 @@ async def main_async(custom_symbols: list = None):
     market_target = os.environ.get("MARKET_TARGET", "BOTH")
     context_str = f"Analyzer_{market_target}"
 
-    # --- DST Time Guard for US Market Open Alignment ---
-    is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+    # Prevent duplicate runs: check if main_pipeline analysis has already run today (UTC date)
+    if not custom_symbols:
+        today_start_utc = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            existing_signals_count = await asyncio.to_thread(
+                signals_col.count_documents,
+                {
+                    "createdAt": {"$gte": today_start_utc},
+                    "featureSnapshot.generationSource": "main_pipeline"
+                }
+            )
+            if existing_signals_count > 0:
+                print("Already analyzed today, skipping duplicate run")
+                sys.exit(0)
+        except Exception as e:
+            print(f"[WARNING] Error checking for existing today's signals in MongoDB: {e}")
+
+    # Check NY time for late execution warning (after 6:00 PM NY time)
     try:
         from zoneinfo import ZoneInfo
         ny_now = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -74,31 +90,8 @@ async def main_async(custom_symbols: list = None):
         ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
 
     ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
-
-    if is_scheduled and market_target in ("US", "BOTH") and not custom_symbols:
-        is_in_open_window = (ny_now.hour == 9 and 15 <= ny_now.minute <= 50)
-        if not is_in_open_window:
-            print(f"[INFO] Skipped: Outside DST-adjusted market open window (Current NY time: {ny_time_str}). This is an expected DST guard skip.")
-            return
-
-    # Prevent duplicate runs on the same day (UTC date) - bypassed for manual custom symbol scans
-    if not custom_symbols:
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = today_start + datetime.timedelta(days=1)
-        try:
-            existing_run = await asyncio.to_thread(
-                logs_col.find_one,
-                {
-                    "context": context_str,
-                    "level": "info",
-                    "createdAt": {"$gte": today_start, "$lt": today_end}
-                }
-            )
-            if existing_run:
-                print("[INFO] Already ran today, skipping analysis.")
-                return
-        except Exception as e:
-            print(f"[WARNING] Error checking for duplicate run: {e}")
+    if ny_now.hour >= 18:
+        print(f"[WARNING] Late execution detected: current NY time is after 6:00 PM ({ny_time_str}). Proceeding with analysis.")
 
     today_date = date.today()
 

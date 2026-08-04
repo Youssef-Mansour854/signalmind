@@ -107,7 +107,14 @@ class AsyncTradeTracker:
             return self._db_client["signalmind"]
 
     async def run_tracking_cycle(self):
-        # DST Time Guard for US Market Trading Hours Alignment
+        database = self.db
+        if database is None:
+            print("[ERROR] MongoDB connection unavailable in trade_tracker. Skipping tracking cycle.")
+            return
+        portfolio_col = database["user_portfolio"]
+        signals_col = database["signals"]
+
+        # DST Time Guard & State Check for Trade Tracker
         is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
         market_target = os.environ.get("MARKET_TARGET", "US")
         force_run = os.environ.get("FORCE_TRACKER", "false").lower() in ("true", "1")
@@ -121,23 +128,35 @@ class AsyncTradeTracker:
                 ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
 
             ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
-            ny_minutes = ny_now.hour * 60 + ny_now.minute
 
-            # US Market regular trading hours window: 09:20 AM to 04:10 PM NY Time
-            market_open_min = 9 * 60 + 20   # 9:20 AM
-            market_close_min = 16 * 60 + 10  # 4:10 PM
-
-            if not (market_open_min <= ny_minutes <= market_close_min):
-                print(f"[INFO] trade_tracker: Skipped - Outside US market trading hours (Current NY time: {ny_time_str}).")
+            from market_holidays import is_us_open
+            if not is_us_open(ny_now.date()):
+                print(f"[INFO] trade_tracker: Skipped - US market closed today (Holiday/Weekend). Current NY time: {ny_time_str}.")
                 return
 
+            if ny_now.hour < 9 or (ny_now.hour == 9 and ny_now.minute < 15):
+                print(f"[INFO] trade_tracker: Skipped - Market not open yet today (Current NY time: {ny_time_str}).")
+                return
+
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            twenty_mins_ago = now_utc - datetime.timedelta(minutes=20)
+
+            recently_checked = await asyncio.to_thread(
+                portfolio_col.find_one,
+                {
+                    "status": {"$regex": "^active$", "$options": "i"},
+                    "updatedAt": {"$gte": twenty_mins_ago}
+                }
+            )
+
+            if recently_checked:
+                print(f"[INFO] trade_tracker: Active portfolio trades were checked recently (< 20 mins ago). Skipping redundant tracking cycle.")
+                return
+
+            if ny_now.hour >= 18:
+                print(f"[WARNING] trade_tracker: Late execution detected (Current NY time: {ny_time_str}). Proceeding with trade tracking cycle.")
+
         print("Starting async trade tracking cycle...")
-        database = self.db
-        if database is None:
-            print("[ERROR] MongoDB connection unavailable in trade_tracker. Skipping tracking cycle.")
-            return
-        portfolio_col = database["user_portfolio"]
-        signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
         # Query open positions where status is 'ACTIVE' (case-insensitive regex fallback)

@@ -76,7 +76,13 @@ class SignalPriceUpdater:
             return self._db_client["signalmind"]
 
     async def update_active_and_pending_signals(self):
-        # DST Time Guard for Intraday Price Updater Checkpoints
+        database = self.db
+        if database is None:
+            print("[ERROR] MongoDB connection unavailable in price_updater. Skipping price update.")
+            return
+        signals_col = database["signals"]
+
+        # DST Time Guard & State Check for Intraday Price Updater Checkpoints
         is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
         market_target = os.environ.get("MARKET_TARGET", "US")
         if is_scheduled and market_target == "US":
@@ -88,22 +94,43 @@ class SignalPriceUpdater:
                 ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
 
             ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
-            
-            # Mid-Day Checkpoint: 12:15 PM - 12:45 PM NY Time
-            is_midday_window = (ny_now.hour == 12 and 15 <= ny_now.minute <= 45)
-            # Market Close Checkpoint: 04:00 PM - 04:30 PM NY Time
-            is_close_window = (ny_now.hour == 16 and 0 <= ny_now.minute <= 30)
 
-            if not (is_midday_window or is_close_window):
-                print(f"[INFO] Skipped: Outside DST-adjusted intraday price update window (Current NY time: {ny_time_str}). Expected DST guard skip.")
+            from market_holidays import is_us_open
+            if not is_us_open(ny_now.date()):
+                print(f"[INFO] Skipped: US market closed today (Holiday/Weekend). Current NY time: {ny_time_str}.")
                 return
 
+            if ny_now.hour < 12:
+                print(f"[INFO] Skipped: Before Mid-Day checkpoint (12:00 PM NY time). Current NY time: {ny_time_str}.")
+                return
+
+            if 12 <= ny_now.hour < 16:
+                checkpoint_label = "Mid-Day (12:00 PM NY)"
+                ny_checkpoint_dt = ny_now.replace(hour=12, minute=0, second=0, microsecond=0)
+            else:
+                checkpoint_label = "Market Close (4:00 PM NY)"
+                ny_checkpoint_dt = ny_now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+            utc_checkpoint_dt = ny_checkpoint_dt.astimezone(datetime.timezone.utc)
+
+            already_updated = await asyncio.to_thread(
+                signals_col.find_one,
+                {
+                    "status": {"$regex": "^(active|pending)$", "$options": "i"},
+                    "updatedAt": {"$gte": utc_checkpoint_dt}
+                }
+            )
+
+            if already_updated:
+                print(f"[INFO] Already updated prices for {checkpoint_label} today. Skipping duplicate run.")
+                return
+
+            if ny_now.hour >= 18:
+                print(f"[WARNING] Late execution detected: {checkpoint_label} price update running late at {ny_time_str}. Proceeding with update.")
+            else:
+                print(f"[INFO] Executing price update for {checkpoint_label} (Current NY time: {ny_time_str})...")
+
         print(f"[INFO] Price Updater starting - fetching latest prices for active DAY_TRADE signals...")
-        database = self.db
-        if database is None:
-            print("[ERROR] MongoDB connection unavailable in price_updater. Skipping price update.")
-            return
-        signals_col = database["signals"]
         now = datetime.datetime.now(datetime.timezone.utc)
 
         # Query signals with status 'PENDING' or 'ACTIVE' focused specifically on DAY_TRADE setups

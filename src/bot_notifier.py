@@ -21,36 +21,74 @@ async def run_briefer():
     print("      SignalMind Telegram Portfolio Briefer ")
     print("==========================================")
 
-    # 1. Initialize Tracker & Run Tracking Cycle
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    today_start_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Initialize Tracker to access MongoDB
     tracker = AsyncTradeTracker()
+    db = tracker.db
+    if db is None:
+        print("[ERROR] MongoDB connection unavailable in bot_notifier. Skipping brief.")
+        return
+    
+    bot_logs_col = db["systemlogs"]
+    portfolio_col = db["user_portfolio"]
+
+    # DST Guard & State Check
+    is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+    force_brief = os.environ.get("FORCE_BRIEF", "false").lower() in ("true", "1")
+
+    if is_scheduled and not force_brief:
+        try:
+            from zoneinfo import ZoneInfo
+            ny_now = datetime.datetime.now(ZoneInfo("America/New_York"))
+        except Exception:
+            import pytz
+            ny_now = datetime.datetime.now(pytz.timezone("America/New_York"))
+
+        ny_time_str = ny_now.strftime("%I:%M %p %Z (%Y-%m-%d)")
+
+        from market_holidays import is_us_open
+        if not is_us_open(ny_now.date()):
+            print(f"[INFO] Skipped: US market closed today (Holiday/Weekend). Current NY time: {ny_time_str}.")
+            return
+
+        if ny_now.hour < 16:
+            print(f"[INFO] Skipped: Daily Portfolio Brief is scheduled to run post-market close (>= 4:00 PM NY time). Current NY time: {ny_time_str}.")
+            return
+
+    # Check MongoDB: Prevent duplicate Brief sent on the same day
+    if not force_brief:
+        already_sent = await asyncio.to_thread(
+            bot_logs_col.find_one,
+            {
+                "context": "daily_portfolio_brief",
+                "createdAt": {"$gte": today_start_utc}
+            }
+        )
+        if already_sent:
+            print("[INFO] Daily Portfolio Brief already sent today. Skipping duplicate notification.")
+            return
+
+    # 1. Run Tracking Cycle to update prices before generating brief
     await tracker.run_tracking_cycle()
 
     # 2. Query MongoDB for active and recently closed trades
-    db = tracker.db
-    portfolio_col = db["user_portfolio"]
-    
-    # Calculate start of today (UTC)
-    now = datetime.datetime.now(datetime.timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Fetch active trades
     active_trades = await asyncio.to_thread(
         lambda: list(portfolio_col.find({"status": "ACTIVE"}))
     )
 
-    # Fetch trades closed today
     closed_trades_today = await asyncio.to_thread(
         lambda: list(portfolio_col.find({
             "status": {"$in": ["Hit TP", "Hit SL", "CLOSED"]},
-            "closedAt": {"$gte": today_start}
+            "closedAt": {"$gte": today_start_utc}
         }))
     )
 
     # 3. Format Telegram Message
     telegram = TelegramSender(config)
     
-    # Message header
-    date_str = now.strftime("%Y-%m-%d")
+    date_str = now_utc.strftime("%Y-%m-%d")
     message = f"🔔 <b>SignalMind Daily Portfolio Brief</b>\n🗓 <b>Date:</b> {date_str} (UTC)\n\n"
 
     # Exits Section
@@ -78,7 +116,6 @@ async def run_briefer():
             entry_price = trade.get("actualEntryPrice") or trade.get("entryPrice") or 0
             current_price = trade.get("currentPrice") or 0
             
-            # Calculate current PnL if we have entry and current prices
             pnl_percent = 0
             if entry_price > 0:
                 pnl_percent = ((current_price - entry_price) / entry_price) * 100
@@ -102,12 +139,14 @@ async def run_briefer():
     message += f"• Closed Losses Today: {losses_today}\n\n"
     message += f"<i>{config.DISCLAIMER_TEXT}</i>"
 
-    # 4. Send Message via Telegram
+    # 4. Send Message via Telegram & Record in MongoDB
+    brief_sent = False
     if telegram.has_credentials():
         print("Sending daily portfolio brief to Telegram...")
         success = await asyncio.to_thread(telegram.send_message, message)
         if success:
             print("Telegram brief sent successfully!")
+            brief_sent = True
         else:
             print("[ERROR] Failed to send Telegram portfolio brief.")
     else:
@@ -119,6 +158,21 @@ async def run_briefer():
             encoding = sys.stdout.encoding or 'utf-8'
             print(message.encode(encoding, errors='replace').decode(encoding))
         print("------------------------------------------")
+        brief_sent = True
+
+    if brief_sent:
+        try:
+            await asyncio.to_thread(
+                bot_logs_col.insert_one,
+                {
+                    "context": "daily_portfolio_brief",
+                    "level": "info",
+                    "message": "Daily Portfolio Brief sent successfully",
+                    "createdAt": now_utc
+                }
+            )
+        except Exception as e:
+            print(f"[WARNING] Could not record daily_portfolio_brief in MongoDB: {e}")
 
 def main():
     asyncio.run(run_briefer())
